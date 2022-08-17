@@ -177,7 +177,7 @@ busca_comarca <- function(municipio){
 
 municipios_faltantes$comarca <- map(municipios_faltantes$nome, possibly(busca_comarca, NA))
 
-#Mais uma vez, existe diferença de grafia entre o IBGE e o TJSP
+# Mais uma vez, existe diferença de grafia entre o IBGE e o TJSP
 filter(municipios_faltantes, is.na(comarca))
 
 revisado <- c("Biritiba Mirim", "Florínea")
@@ -197,7 +197,6 @@ municipios_faltantes$comarca <- gsub("Estrela dOeste",  "Estrela d'Oeste", munic
 municipios_sp <- rbind(sede_de_comarca, municipios_faltantes)|>
   arrange(nome)
 
-save(municipios_faltantes, file="Documentos/municipios_faltantes.RData")
 save(municipios_sp, file="Documentos/municipios_sp.RData")
 
 rm(revisado, municipios_faltantes, sede_de_comarca, busca_comarca)
@@ -319,7 +318,7 @@ sede_de_comarca <- semi_join(codigos, municipios_sp, by = "comarca") |>
 nao_comarca <- anti_join(codigos, municipios_sp, by = "comarca") |>
   select(codigo, descr, comarca)
 
-# 6 - Temos uma lista de cidades que não são sede de comarca
+#6 - Temos uma lista de cidades que não são sede de comarca
   #Vamos identificar as comarcas pelo cruzamento com a tabela "municipios_sp"
 
 nao_comarca <- left_join(nao_comarca, municipios_sp[ , 2:3], by = c("comarca" = "nome"))
@@ -329,7 +328,6 @@ filter(nao_comarca, is.na(comarca.y))
 # Brás Cubas é foro Distrital pertencente à Comarca de Mogi das Cruzes
 # Competência Originária é a designação que atribuimos aos feitos iniciados
   #diretamente em segunda instância
-# de embu
 # Embu foi renomeada como Embu das Artes pela Lei Estadual nº 14.537
 # Florínia pertence à Comarca de Assis
 # Brás Cubas é foro Distrital da Comarca do Guarujá
@@ -361,7 +359,7 @@ rm(nao_comarca, sede_de_comarca, novo, original)
 #                     ADICIONANDO CÓDIGOS FALTANTES                            #
 ################################################################################
 
-# 1 - Identificando códigos constantes das listas de distribuição, mas
+#1 - Identificando códigos constantes das listas de distribuição, mas
   # desprovidos de correspondente em "codigos"
 load(here::here("Documentos", "Distribuicao_df.RData"))
 
@@ -373,7 +371,7 @@ codigos_faltantes <- distribuicao_df |>
   arrange(Codigo)
 
 
-# 2 - Efetuando Raspagem de Dados no sistema do TJSP
+#2 - Efetuando Raspagem de Dados no sistema do TJSP
   # O procedimento a seguir consiste em uma extensa adaptação à função
   # baixar_cposg(), Desenvolvida por José de Jesus Filho e disponível em:
   # https://github.com/jjesusfilho/tjsp
@@ -410,15 +408,75 @@ busca_foro <- function(processo = NULL){
 
 codigos_faltantes <- map(codigos_faltantes$Processo, busca_foro)
 
-#Convertendo as listas aninhadas em um só df
+#3 - Convertendo as listas aninhadas em um só df
 codigos_faltantes <- data.frame(Reduce(rbind, codigos_faltantes))
 names(codigos_faltantes) <- c("processo", "codigo", "descr", "comarca")
+row.names(codigos_faltantes) <- NULL
 
+#4 - Enfrentando casos não solucionados pela função
+filter(codigos_faltantes, is.na(comarca))
 
-# save(codigos_faltantes, file="Documentos/faltantes.RData")
-# load(here::here("Documentos", "faltantes.RData"))
-# 
-# filter(distribuicao_df, Codigo == "0074")
-# 
-# save(codigos, file="Documentos/codigos_sp.RData")
+adicionados <- data.frame(
+  a = c("0027", "Foro de Iacanga", "Ibitinga"),
+  b = c("0074", "Foro de Maracaí", "Maracaí"),
+  b = c("0232", "Foro de Cesário Lange", "Cesário Lange"),
+  b = c("0243", "UAAJ Natividade da Serra", "Paraibuna"),
+  e = c("0514", "Foro Distrital de Itupeva", "Jundiaí"),
+  f = c("0550", "Foro Plantão de Rio Claro", "Rio Claro"),
+  g = c("0551", "Foro Plantão de Limeira", "Limeira"),
+  h = c("0592", "Foro Pantão de Tupã", "Tupã"),
+  i = c("0594", "Foro de Bauru", "Bauru"),
+  j = c("0600", "Foro Plantão de Lins", "Lins"),
+  k = c("0603", "Foro Plantão de Araçatuba", "Araçatuba"),
+  l = c("0618", "Foro Plantão de Taubaté", "Taubaté"),
+  m = c("0622", "Foro Plantão de Itapeva", "Itapeva"),
+  n = c("0631", "Foro Plantão de Amparo", "Amparo"),
+  o = c("0968", "Turma de Uniformização - JE", "Competência Originária"),
+  p = c("9005", "Colégio Recursal de Santana", "São Paulo"),
+  q = c("9007", "Colégio Recursal de Campinas", "Campinas"),
+row.names = c("codigo", "descr", "comarca"))|>
+t()
 
+row.names(adicionados) <- NULL
+
+codigos <- rbind(codigos,
+           filter(codigos_faltantes[2:4], !is.na(comarca)),
+           adicionados)|>
+           arrange(codigo)
+
+#5 - Avaliando o Resultado
+
+# O Número de comarcas distintas em "códigos" ultrapassa em 2 a quantidade
+  # atual de comarcas no estado.
+n_distinct(codigos$comarca)
+
+anti_join(codigos, municipios_sp, by = "comarca") |>
+  select(codigo, descr, comarca)
+
+# Competência Originária é a designação atribuida aos procedimentos iniciados
+  # diretamente no tribunal.
+  # Mogi Guaçu sem hífen.
+
+codigos$comarca <- gsub("Mogi-Guaçu",  "Mogi Guaçu", codigos$comarca)
+
+n_distinct(codigos$comarca)
+
+codigos |>
+  semi_join(municipios_sp, by = "comarca") |>
+  distinct(comarca, .keep_all = TRUE) |>
+  nrow()
+
+# Todos os códigos não identificados dizem respeito a processos ajuizados em 
+  # outros Tribunais, como pode ser aferido pelo código de Tribunal diferente de
+  # "8.26"
+
+View(distribuicao_df |>
+  left_join(codigos, by = c("Codigo" = "codigo")) |>
+  select(Processo, Codigo, Tribunal, comarca) |>
+  filter(is.na(comarca)) |>
+  distinct(Codigo, .keep_all = TRUE) |>
+  arrange(Codigo))
+
+rm(codigos_faltantes, adicionados)
+
+save(codigos, file="Documentos/codigos_sp.RData")

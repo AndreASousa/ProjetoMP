@@ -2,7 +2,7 @@
 ## O Script se destina à extração de dados das listas de distribuição para
   # uma base de dados única em formato "data frame"
 
-# O processo de extração de dados é computacionalmente demandante (~10 min).
+## O processo de extração de dados é computacionalmente demandante (~10 min).
   # Preparamos quatro arquivos para que o interessado possa aferir os trabalhos
   # em estágios diferentes:
 
@@ -20,6 +20,18 @@
   # load(here::here("Documentos", "Distribuicao_df.RData"))
     # Consiste na base de dados já finalizada
 
+## Até o momento a base de dados é constituida por três tabelas distintas:
+
+  # load(here::here("Documentos", "Distribuicao_df.RData"))
+    # Contém as informações extraidas diretamente das listas de distribuição
+
+  # load(here::here("Documentos", "municipios_sp.RData"))
+    # Contém a lista de todos os municípios de SP o código IBGE e
+    # a comarca a que cada um pertence
+
+  # load(here::here("Documentos", "codigos_sp.RData"))
+    # Vincula cada código de "unidade judiciária" (OOOO) à
+    # Comarca a que pertence, bem como a descrição de Foro
 
 ################################################################################
 #                 INSTALAÇÃO E CARREGAMENTO DE PACOTES NECESSÁRIOS             #
