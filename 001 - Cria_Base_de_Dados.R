@@ -2,7 +2,7 @@
 ## O Script se destina à extração de dados das listas de distribuição para
   # uma base de dados única em formato "data frame"
 
-# O processo de extração de dados é computacionalmente demandante.
+# O processo de extração de dados é computacionalmente demandante (~10 min).
   # Preparamos quatro arquivos para que o interessado possa aferir os trabalhos
   # em estágios diferentes:
 
