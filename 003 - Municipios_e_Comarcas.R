@@ -92,13 +92,13 @@ colnames(comarcas) <- "comarca"
 
 #3 - Identificando as sedes de Comarca
 
-sedes_de_comarca <- inner_join(municipios_sp, comarcas, by = c("nome" ="comarca"))
+sede_de_comarca <- inner_join(municipios_sp, comarcas, by = c("nome" ="comarca"))
 
-# Note que as "sedes_de_comarcas" possui um número de observações inferior ao
+# Note que "sede_de_comarca" possui um número de observações inferior ao
   # Total de comarcas do TJSP
   # Isso ocorre por diferença de grafia
 
-grafia <- anti_join(comarcas, sedes_de_comarca, by = c("comarca" = "nome"))
+grafia <- anti_join(comarcas, sede_de_comarca, by = c("comarca" = "nome"))
 grafia <- grafia[, 1]
 
 # Vila Mimosa não é uma comarca, mas um Fórum Regional da Comarca de Campinas
@@ -118,8 +118,8 @@ colnames(nova_grafia) <- "comarca"
 comarcas <- filter(comarcas, !comarca %in% grafia)
 comarcas <- rbind(comarcas, nova_grafia)
 
-sedes_de_comarca <- inner_join(municipios_sp, comarcas, by = c("nome" ="comarca"))
-sedes_de_comarca$comarca <- sedes_de_comarca$nome
+sede_de_comarca <- inner_join(municipios_sp, comarcas, by = c("nome" ="comarca"))
+sede_de_comarca$comarca <- sede_de_comarca$nome
 
 rm(nova_grafia, grafia)
 
@@ -194,13 +194,13 @@ municipios_faltantes$comarca[municipios_faltantes$nome %in% revisado] <- c("Águ
 
 municipios_faltantes$comarca <- gsub("Estrela dOeste",  "Estrela d'Oeste", municipios_faltantes$comarca )
 
-municipios_sp <- rbind(sedes_de_comarca, municipios_faltantes)|>
+municipios_sp <- rbind(sede_de_comarca, municipios_faltantes)|>
   arrange(nome)
 
 save(municipios_faltantes, file="Documentos/municipios_faltantes.RData")
 save(municipios_sp, file="Documentos/municipios_sp.RData")
 
-rm(revisado, municipios_faltantes, sedes_de_comarca, busca_comarca)
+rm(revisado, municipios_faltantes, sede_de_comarca, busca_comarca)
 
 
 ################################################################################
@@ -212,7 +212,6 @@ rm(revisado, municipios_faltantes, sedes_de_comarca, busca_comarca)
 #1 -  Extraindo a tabela que contém os códigos de unidade de origem
   # O Documento é desatualizado e exige modificações
 
-
 httr::GET(url = "https://www.cnj.jus.br/wp-content/uploads/2011/02/foros-1.xls",
           write_disk(path = "Documentos/codigos_sp.xls", overwrite = TRUE))
                     
@@ -223,10 +222,11 @@ codigos <- as.data.frame(read_excel(here::here("Documentos", "codigos_sp.xls")))
 #2 - Adicionando "Leading Zeroes"
   # Cada código de unidade judiciária possui 4 números (OOOO), sendo necessário
   # adicionar zeros no iício
+
 codigos <- codigos |>
          mutate(codigo = str_pad(codigo, 4, pad = "0"),
         # Criando uma nova coluna
-        local = descr)
+        comarca = descr)
 
 
 #3 - Atualizando a lista de Comarcas
@@ -235,7 +235,7 @@ codigos <- codigos |>
   # Comarcas segundo o próprio TJSP
 length(comarcas$comarca) - length(unique(codigos$comarca_antiga))
 
-# Vamos Povoar a coluna "local" rescém criada com a identificação da cidade,
+# Vamos Povoar a coluna "comarca" rescém criada com a identificação da cidade,
   # tendo em vista que a disposição das comarcas pode ter mudado,
   # mas o "Foro distrital de Arujá" continua em Arujá
 
@@ -252,70 +252,113 @@ length(comarcas$comarca) - length(unique(codigos$comarca_antiga))
   # todo recurso eespecial, todo recurso extraordinário foram ajuizados por
   # residentes na Capital
 
-
 codigos <- codigos |>
-      mutate(local = gsub(".+Regional.+-\\s+.+", "São Paulo", local)) |>
-      mutate(local = gsub(".+Regional de.+", "Campinas", local)) |>
+      mutate(comarca = gsub(".+Regional.+-\\s+.+", "São Paulo", comarca)) |>
+      mutate(comarca = gsub(".+Regional de.+", "Campinas", comarca)) |>
       #Apenas São Paulo e Campinas possuem Foros Regionais
       #Vila Mimosa é o único foro regional pertencente a Campinas 
-      mutate(local = gsub(".+Central.+", "São Paulo", local)) |>
-      mutate(local = gsub("Foro das Execuções Fiscais.+", "São Paulo", local)) |>
-      mutate(local = gsub("Foro Especial da Infância e Juventude", "São Paulo", local)) |>
-      mutate(local = gsub("Setor de Cartas Precatórias Cíveis - Cap", "São Paulo", local)) |>
-      mutate(local = gsub("Foro de\\s+(.+)", "\\1", local))|>
-      mutate(local = case_when(comarca_antiga == "São Paulo" & grepl("Distrital", codigos$local) ~ "São Paulo",
-                            TRUE  ~ local)) |> #Se a Comarca for São Paulo e For um Local Distrital -> "São Paulo"
-      mutate(local = gsub(".+Distrital de\\s+(.+)", "\\1", local)) |>
-      mutate(local = gsub("Foro Unificado", "Competência Originária", local)) |>
-      mutate(local = gsub("Tribunal de .+", "Competência Originária", local)) |>
-      mutate(local = gsub("Foro\\s+(.+)", "\\1", local))
+      mutate(comarca = gsub(".+Central.+", "São Paulo", comarca)) |>
+      mutate(comarca = gsub("Foro das Execuções Fiscais.+", "São Paulo", comarca)) |>
+      mutate(comarca = gsub("Foro Especial da Infância e Juventude", "São Paulo", comarca)) |>
+      mutate(comarca = gsub("Setor de Cartas Precatórias Cíveis - Cap", "São Paulo", comarca)) |>
+      mutate(comarca = gsub("Foro de\\s+(.+)", "\\1", comarca))|>
+      mutate(comarca = case_when(comarca_antiga == "São Paulo" & grepl("Distrital", codigos$comarca) ~ "São Paulo",
+                            TRUE  ~ comarca)) |> #Se a Comarca for São Paulo e For um Local Distrital -> "São Paulo"
+      mutate(comarca = gsub(".+Distrital de\\s+(.+)", "\\1", comarca)) |>
+      mutate(comarca = gsub("Foro Unificado", "Competência Originária", comarca)) |>
+      mutate(comarca = gsub("Tribunal de .+", "Competência Originária", comarca)) |>
+      mutate(comarca = gsub("Foro\\s+(.+)", "\\1", comarca))
 
-anti_join(municipios_sp, codigos, by = c("comarca" ="local")) |>
+
+#4 - Identificando todas as comarcas que aparecem na lista municípios_sp,
+  # mas que estão ausentes da tabela "codigos" 
+
+# O objeto "municípios" já contém as 320 comarcas do Estado de São Paulo.
+  #Contudo, nem todas as comarcas constam da lista do CNJ que extraímos.
+
+anti_join(municipios_sp, codigos, by = "comarca") |>
     distinct(comarca, .keep_all = TRUE) |>
     arrange(comarca)
-
 
 # Birigui - "Uso de Tremas"
 # Eldorado - Registrado como "Eldorado Paulista" para distinguir de cidade homônima
 # Embu das Artes - É comarca, Código "0176"
 # Estrela D’Oeste -  Distinçao ente ' e ´
 # Ipaussu - Registrado com "ç" ao invés de "ss"
-# Palmeira D’Oeste -  Distinçao ente ' e ´
+# Palmeira D’Oeste -  Distinçao ente ' e ´ e "d" e "D"
 # Santa Bárbara D’Oeste - Distinçao ente ' e ´
 # Santana de Parnaíba - É comarca, Código "0529"
 # São Luiz do Paraitinga - "Luis" ao invés de "Luiz"
 
 revisado <- data.frame(embu_d_a <- c("0176", "Foro de Embu das Artes", "Embu das Artes", "Embu das Artes"),
                        santana_d_p <- c("0529", "Foro de Santana de Parnaíba", "Santana de Parnaíba", "Santana de Parnaíba"),
-                  row.names = c("codigo", "descr", "comarca_antiga", "local"))|>
+                  row.names = c("codigo", "descr", "comarca_antiga", "comarca"))|>
                   t()
 row.names(revisado) <- NULL
 
 codigos <- codigos |>
            rbind(revisado) |>
-           arrange(local)     
+           arrange(comarca)     
 
-codigos$local <- gsub("Birigüi",  "Birigui", codigos$local)
-codigos$local <- gsub("Eldorado Paulista",  "Eldorado", codigos$local)
-codigos$local <- gsub("Estrela D'Oeste",  "Estrela d'Oeste", codigos$local)
-codigos$local <- gsub("Ipauçu",  "Ipaussu", codigos$local)
-codigos$local <- gsub("Palmeira D’Oeste",  "Palmeira d'Oeste", codigos$local)
-codigos$local <- gsub("Santa Bárbara D'Oeste",  "Santa Bárbara d'Oeste", codigos$local)
-codigos$local <- gsub("São Luis do Paraitinga",  "São Luiz do Paraitinga", codigos$local)
+codigos$comarca <- gsub("Birigüi",  "Birigui", codigos$comarca)
+codigos$comarca <- gsub("Eldorado Paulista",  "Eldorado", codigos$comarca)
+codigos$comarca <- gsub("Estrela D'Oeste",  "Estrela d'Oeste", codigos$comarca)
+codigos$comarca <- gsub("Ipauçu",  "Ipaussu", codigos$comarca)
+codigos$comarca <- gsub("Palmeira D'Oeste",  "Palmeira d'Oeste", codigos$comarca)
+codigos$comarca <- gsub("Santa Bárbara D'Oeste",  "Santa Bárbara d'Oeste", codigos$comarca)
+codigos$comarca <- gsub("São Luis do Paraitinga",  "São Luiz do Paraitinga", codigos$comarca)
 
 rm(revisado, comarcas, embu_d_a, santana_d_p)
 
-n_distinct(codigos$local)
 
-nao_comarca <- anti_join(codigos, municipios_sp, by = c("local" ="comarca")) |>
-  select(local)
+#5 - Identificando as localidades em "códigos" que não são sede de comarca
+
+sede_de_comarca <- semi_join(codigos, municipios_sp, by = "comarca") |>
+  select(codigo, descr, comarca)
+
+nao_comarca <- anti_join(codigos, municipios_sp, by = "comarca") |>
+  select(codigo, descr, comarca)
+
+# 6 - Temos uma lista de cidades que não são sede de comarca
+  #Vamos identificar as comarcas pelo cruzamento com a tabela "municipios_sp"
+
+nao_comarca <- left_join(nao_comarca, municipios_sp[ , 2:3], by = c("comarca" = "nome"))
+              
+filter(nao_comarca, is.na(comarca.y))
+
+# Brás Cubas é foro Distrital pertencente à Comarca de Mogi das Cruzes
+# Competência Originária é a designação que atribuimos aos feitos iniciados
+  #diretamente em segunda instância
+# de embu
+# Embu foi renomeada como Embu das Artes pela Lei Estadual nº 14.537
+# Florínia pertence à Comarca de Assis
+# Brás Cubas é foro Distrital da Comarca do Guarujá
+
+original <- c("Brás Cubas", "Embu", "Florínia", "Vicente de Carvalho")
+novo <- c("Mogi das Cruzes", "Embu das Artes", "Assis", "Guarujá")
+
+nao_comarca$comarca.y[nao_comarca$comarca %in% original] <- novo
+nao_comarca$comarca.y[nao_comarca$comarca == "Competência Originária"] <- "Competência Originária"
+
+nao_comarca <- nao_comarca |>
+               mutate(comarca = comarca.y) |>
+               select(!comarca.y)
+
+codigos <- rbind(sede_de_comarca, nao_comarca)
+
+# Atingimos o número atual de comarcas Paulistas com a adição de um identificador
+  # para os feitos de competência originária do Tribunal
+n_distinct(codigo$comarca)
+
+codigos |>
+  semi_join(municipios_sp, by = "comarca") |>
+  distinct(comarca, .keep_all = TRUE) |>
+  nrow()
+
+rm(nao_comarca, sede_de_comarca, novo, original)
+
+# 7 - Identificando os códigos de unidade de origem faltantes
+
+load(here::here("Documentos", "Distribuicao_df.RData"))
 
 save(codigos, file="Documentos/codigos_sp.RData")
-
-
-
-
-
-
-
-

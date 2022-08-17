@@ -1,6 +1,24 @@
 
 ## O Script se destina à extração de dados das listas de distribuição para
-# uma base de dados única em formato "data frame"
+  # uma base de dados única em formato "data frame"
+
+# O processo de extração de dados é computacionalmente demandante.
+  # Preparamos quatro arquivos para que o interessado possa aferir os trabalhos
+  # em estágios diferentes:
+
+  # load(here::here("Documentos", "Distribuicao_dl.RData"))
+    # Contém uma lista aninhada para cada página de pdf, excluidas as em branco
+
+  # load(here::here("Documentos", "Distribuicao_dlc.RData"))
+    # Contém uma lista aninhada para cada cargo que recebeu processos em certa data
+    
+
+  # load(here::here("Documentos", "Distribuicao_padrao.RData"))
+    # Contém lista aninhada após iteraçao para lidar com processos distribuidos
+    # à Secretaria Executiva e não para um cargo específico
+
+  # load(here::here("Documentos", "Distribuicao_df.RData"))
+    # Consiste na base de dados já finalizada
 
 
 ################################################################################
@@ -189,12 +207,17 @@ while(n < n_iteracoes){
 rm(ciencia, n, n_iteracoes)
 save(distribuicao_dlc, file="Documentos/Distribuicao_dlc.RData")
 
-##Resta um último desafio antes da extração de dados.
-# Existem dois padrões distintos de distribuiçao.
+## Resta um último desafio antes da extração de dados.
 
+# Vejamos o formato padrão das listas
 View(distribuicao_dlc$'1')
-View(distribuicao_dlc$'32') #Note que não foi distribuido a um nº de cargo
-View(distribuicao_dlc$'11972') #Note que a informação se situa em linha distinta
+
+# Note que os processos não foram distribuidos a um cargo específico
+  # São casos atribuidos à Secretaria Executiva
+View(distribuicao_dlc$'32') 
+
+# Note o destinatário dos processos aparece em linha separada:
+View(distribuicao_dlc$'11972') 
 
 # É possível isolar as listas a serem modificadas com o seguinte algoritmo:
 outros <- purrr::keep(distribuicao_dlc, ~all(!str_detect(.x$Linha,
@@ -208,8 +231,6 @@ for(n in 1:length(distribuicao_padrao)){
     distribuicao_padrao[[n]]$Linha[6] <- "99º Procurador de Justiça da Proc de Justiça Cível"
   } 
 }
-
-
 
 rm(outros, n)
 save(distribuicao_padrao, file="Documentos/Distribuicao_padrao.RData")
