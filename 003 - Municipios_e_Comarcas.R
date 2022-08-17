@@ -95,8 +95,8 @@ colnames(comarcas) <- "comarca"
 sedes_de_comarca <- inner_join(municipios_sp, comarcas, by = c("nome" ="comarca"))
 
 # Note que as "sedes_de_comarcas" possui um número de observações inferior ao
-# Total de comarcas do TJSP
-# Isso ocorre por diferença de grafia
+  # Total de comarcas do TJSP
+  # Isso ocorre por diferença de grafia
 
 grafia <- anti_join(comarcas, sedes_de_comarca, by = c("comarca" = "nome"))
 grafia <- grafia[, 1]
@@ -128,14 +128,14 @@ rm(nova_grafia, grafia)
 municipios_faltantes <- anti_join(municipios_sp, comarcas, by = c("nome" ="comarca"))
 
 # É possível identificar a comarca a que cada município é vinculado
-# pelo endereço: https://www.tjsp.jus.br/ListaTelefonica
+  # pelo endereço: https://www.tjsp.jus.br/ListaTelefonica
 
 # Infelizmente, o seguinte método apenas funciona para municípios que não sejam
-# sede de comarda, obrigando o passo acima.
+  # sede de comarda, obrigando o passo acima.
 
 # A página segue o formato de formulário e remete a outros URLs
-# Utilizamos as ferramentas de desenvolvedor do Chrome para acompanhar o
-# tráfego de rede ("F12") e o corpo da mensagem desejado ("Payload) 
+  # Utilizamos as ferramentas de desenvolvedor do Chrome para acompanhar o
+  # tráfego de rede ("F12") e o corpo da mensagem desejado ("Payload) 
 
 busca_comarca <- function(municipio){
   
@@ -209,72 +209,108 @@ rm(revisado, municipios_faltantes, sedes_de_comarca, busca_comarca)
 
 
 
-#5 -  Vinculando os Códigos de Unidade Judiciária a cada Comarca
+#1 -  Extraindo a tabela que contém os códigos de unidade de origem
+  # O Documento é desatualizado e exige modificações
+
 
 httr::GET(url = "https://www.cnj.jus.br/wp-content/uploads/2011/02/foros-1.xls",
-          write_disk(path = "Documentos/foros_sp.xls", overwrite = TRUE))
+          write_disk(path = "Documentos/codigos_sp.xls", overwrite = TRUE))
                     
-foros <- as.data.frame(read_excel(here::here("Documentos", "foros_sp.xls"))) |>
-        rename(Codigo = Código, Descr = Descrição)
+codigos <- as.data.frame(read_excel(here::here("Documentos", "codigos_sp.xls"))) |>
+        rename(codigo = Código, descr = Descrição, comarca_antiga = Comarca)
 
 
-##Adicionando "Leading Zeroes"
-  #Cada código de unidade judiciária possui 4 números (OOOO), sendo necessário
-  #adicionar zeros no iício
-foros <- foros |>
-         mutate(Codigo = str_pad(Codigo, 4, pad = "0"),
-         #Criando uma nova coluna
-         Local = Descr)
+#2 - Adicionando "Leading Zeroes"
+  # Cada código de unidade judiciária possui 4 números (OOOO), sendo necessário
+  # adicionar zeros no iício
+codigos <- codigos |>
+         mutate(codigo = str_pad(codigo, 4, pad = "0"),
+        # Criando uma nova coluna
+        local = descr)
 
-foros <- foros |>
-      mutate(Local = gsub(".+Regional.+-\\s+.+", "São Paulo", Local)) |>
-      mutate(Local = gsub(".+Regional de.+", "Campinas", Local)) |>
+
+#3 - Atualizando a lista de Comarcas
+
+# Note que a tabela apresenta 43 comarcas a menos do que o atual número de
+  # Comarcas segundo o próprio TJSP
+length(comarcas$comarca) - length(unique(codigos$comarca_antiga))
+
+# Vamos Povoar a coluna "local" rescém criada com a identificação da cidade,
+  # tendo em vista que a disposição das comarcas pode ter mudado,
+  # mas o "Foro distrital de Arujá" continua em Arujá
+
+# Embora os códigos "0000" e "0990" constem como pertencentes à Comarca de São Paulo,
+  # eles representam os processos e procedimentos de Competência Originária do Tribunal
+  # Tratam-se de feitos que têm início diretamente no Tribunal,
+  # e não em uma Vara de 1ª Instância
+
+# A Exemplo, todos os agravos de instrumento do estado são distribuidos diretamente
+  # às Câmaras e Sub-Presidências do Tribunal de Justiça sob o código "0000".
+
+# Assim, a manutenção como "Comarca de São Paulo" pode ensejar conclusões erradas
+  # Quando da análise dos dados, fazendo supor que todo agravo de instrumento,
+  # todo recurso eespecial, todo recurso extraordinário foram ajuizados por
+  # residentes na Capital
+
+
+codigos <- codigos |>
+      mutate(local = gsub(".+Regional.+-\\s+.+", "São Paulo", local)) |>
+      mutate(local = gsub(".+Regional de.+", "Campinas", local)) |>
       #Apenas São Paulo e Campinas possuem Foros Regionais
       #Vila Mimosa é o único foro regional pertencente a Campinas 
-      mutate(Local = gsub(".+Central.+", "São Paulo", Local)) |>
-      mutate(Local = gsub("Foro das Execuções Fiscais.+", "São Paulo", Local)) |>
-      mutate(Local = gsub("Foro Especial da Infância e Juventude", "São Paulo", Local)) |>
-      mutate(Local = gsub("Setor de Cartas Precatórias Cíveis - Cap", "São Paulo", Local)) |>
-      mutate(Local = gsub("Foro de\\s+(.+)", "\\1", Local))|>
-      mutate(Local = case_when(Comarca == "São Paulo" & grepl("Distrital", foros$Local) ~ "São Paulo",
-                            TRUE  ~ Local)) |> #Se a Comarca for São Paulo e For um Local Distrital -> "São Paulo"
-      mutate(Local = gsub(".+Distrital de\\s+(.+)", "\\1", Local))
+      mutate(local = gsub(".+Central.+", "São Paulo", local)) |>
+      mutate(local = gsub("Foro das Execuções Fiscais.+", "São Paulo", local)) |>
+      mutate(local = gsub("Foro Especial da Infância e Juventude", "São Paulo", local)) |>
+      mutate(local = gsub("Setor de Cartas Precatórias Cíveis - Cap", "São Paulo", local)) |>
+      mutate(local = gsub("Foro de\\s+(.+)", "\\1", local))|>
+      mutate(local = case_when(comarca_antiga == "São Paulo" & grepl("Distrital", codigos$local) ~ "São Paulo",
+                            TRUE  ~ local)) |> #Se a Comarca for São Paulo e For um Local Distrital -> "São Paulo"
+      mutate(local = gsub(".+Distrital de\\s+(.+)", "\\1", local)) |>
+      mutate(local = gsub("Foro Unificado", "Competência Originária", local)) |>
+      mutate(local = gsub("Tribunal de .+", "Competência Originária", local)) |>
+      mutate(local = gsub("Foro\\s+(.+)", "\\1", local))
+
+anti_join(municipios_sp, codigos, by = c("comarca" ="local")) |>
+    distinct(comarca, .keep_all = TRUE) |>
+    arrange(comarca)
 
 
+# Birigui - "Uso de Tremas"
+# Eldorado - Registrado como "Eldorado Paulista" para distinguir de cidade homônima
+# Embu das Artes - É comarca, Código "0176"
+# Estrela D’Oeste -  Distinçao ente ' e ´
+# Ipaussu - Registrado com "ç" ao invés de "ss"
+# Palmeira D’Oeste -  Distinçao ente ' e ´
+# Santa Bárbara D’Oeste - Distinçao ente ' e ´
+# Santana de Parnaíba - É comarca, Código "0529"
+# São Luiz do Paraitinga - "Luis" ao invés de "Luiz"
 
-
-teste <- dplyr::right_join(uni_jud, comarcas, by = c("Local" ="Comarca"))
-
-#Birigui - "Uso de Tremas"
-#Carapicuiba - "Acentuação diferente"
-#Cerqueira Cesar - "Acentuação diferente"
-#Eldorado - Registrado como "Eldorado Paulista" para distinguir de cidade homônima
-#Embu das Artes - Registrado como "Local de Embu"
-#Estrela D’Oeste -  Distinçao ente ' e ´
-#Ipaussu - Registrado como Ipauçu o nome atuautliza "ss"
-#Palmeira D’Oeste -  Distinçao ente ' e ´
-#Rio Grande de Serra - Uso de "de Serra" em lugar de "da Serra"
-#Santa Bárbara D’Oeste - Distinçao ente ' e ´
-#Santa Rosa do Viterbo - Uso de "de Viderbo" em lugar de "de Viterbo"
-#Vila Mimosa - Trata-se de Local Regional de Campinas
-
-revisado <- data.frame(embu_d_a <- c("0176", "Local de Embu das Artes", "Embu das Artes", "Embu das Artes"),
-                  ipaussu <- c("0252", "Local de Ipaussu", "Ipaussu", "Ipaussu"),
-                  santana_d_p <- c("0529", "Local de Santana de Parnaíba", "Santana de Parnaíba", "Santana de Parnaíba"),
-                  row.names = c("Codigo", "Descr", "Comarca", "Local"))|>
+revisado <- data.frame(embu_d_a <- c("0176", "Foro de Embu das Artes", "Embu das Artes", "Embu das Artes"),
+                       santana_d_p <- c("0529", "Foro de Santana de Parnaíba", "Santana de Parnaíba", "Santana de Parnaíba"),
+                  row.names = c("codigo", "descr", "comarca_antiga", "local"))|>
                   t()
 row.names(revisado) <- NULL
 
-foros <- foros |>
-         filter(!(Codigo %in% c("0176", "0252","0529"))) |>
-         rbind(revisado) |>
-         arrange(Codigo)
+codigos <- codigos |>
+           rbind(revisado) |>
+           arrange(local)     
 
-rm(revisado, comarcas, embu_d_a, ipaussu, santana_d_p)
-n_distinct(foros$Local)
+codigos$local <- gsub("Birigüi",  "Birigui", codigos$local)
+codigos$local <- gsub("Eldorado Paulista",  "Eldorado", codigos$local)
+codigos$local <- gsub("Estrela D'Oeste",  "Estrela d'Oeste", codigos$local)
+codigos$local <- gsub("Ipauçu",  "Ipaussu", codigos$local)
+codigos$local <- gsub("Palmeira D’Oeste",  "Palmeira d'Oeste", codigos$local)
+codigos$local <- gsub("Santa Bárbara D'Oeste",  "Santa Bárbara d'Oeste", codigos$local)
+codigos$local <- gsub("São Luis do Paraitinga",  "São Luiz do Paraitinga", codigos$local)
 
+rm(revisado, comarcas, embu_d_a, santana_d_p)
 
-save(foros, file="Documentos/foros.RData")
+n_distinct(codigos$local)
+
+nao_comarca <- anti_join(codigos, municipios_sp, by = c("local" ="comarca")) |>
+  select(local)
+
+save(codigos, file="Documentos/codigos_sp.RData")
 
 
 
