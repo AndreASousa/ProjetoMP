@@ -145,7 +145,7 @@ busca_comarca <- function(municipio){
                              body = corpo,
                              encode = "form",
                              httr::accept("text/html; charset=latin1;")) |>
-    httr::content("parse")
+                  httr::content("parse")
   
   corpo <- list(parmsEntrada = busca_codigo[[1]][["Codigo"]],
                 codigoTipoBusca = "1")
@@ -154,9 +154,9 @@ busca_comarca <- function(municipio){
                            body = corpo,
                            encode = "form",
                            httr::accept("text/html; charset=latin1;")) |>
-    httr::content("parse") |>
-    rvest::html_elements("h4") |>
-    rvest:: html_text()
+                httr::content("parse") |>
+                rvest::html_elements("h4") |>
+                 rvest:: html_text()
   
   comarca <- stringr::str_replace(busca_foro[str_detect(busca_foro, ".+à comarca\\s+(.+)")],
                                   ".+à comarca\\s+(.+)", "\\1")
@@ -348,7 +348,7 @@ codigos <- rbind(sede_de_comarca, nao_comarca)
 
 # Atingimos o número atual de comarcas Paulistas com a adição de um identificador
   # para os feitos de competência originária do Tribunal
-n_distinct(codigo$comarca)
+n_distinct(codigos$comarca)
 
 codigos |>
   semi_join(municipios_sp, by = "comarca") |>
@@ -357,8 +357,68 @@ codigos |>
 
 rm(nao_comarca, sede_de_comarca, novo, original)
 
-# 7 - Identificando os códigos de unidade de origem faltantes
+################################################################################
+#                     ADICIONANDO CÓDIGOS FALTANTES                            #
+################################################################################
 
+# 1 - Identificando códigos constantes das listas de distribuição, mas
+  # desprovidos de correspondente em "codigos"
 load(here::here("Documentos", "Distribuicao_df.RData"))
 
-save(codigos, file="Documentos/codigos_sp.RData")
+codigos_faltantes <- distribuicao_df |>
+  left_join(codigos, by = c("Codigo" = "codigo")) |>
+  select(Processo, Codigo, Tribunal, comarca) |>
+  filter(is.na(comarca), Tribunal == "8.26") |>
+  distinct(Codigo, .keep_all = TRUE) |>
+  arrange(Codigo)
+
+
+# 2 - Efetuando Raspagem de Dados no sistema do TJSP
+  # O procedimento a seguir consiste em uma extensa adaptação à função
+  # baixar_cposg(), Desenvolvida por José de Jesus Filho e disponível em:
+  # https://github.com/jjesusfilho/tjsp
+
+
+busca_foro <- function(processo = NULL){
+  httr::set_config(httr::config(ssl_verifypeer = FALSE))
+  url <- "https://esaj.tjsp.jus.br/cposg/search.do?"
+  unificado <- processo |> stringr::str_extract(".{15}")
+  codigo <- processo |> stringr::str_extract("\\d{4}$")
+  
+  query1 <- list(conversationId = "", paginaConsulta = "1", 
+               localPesquisa.cdLocal = "-1", cbPesquisa = "NUMPROC", 
+               tipoNuProcesso = "UNIFICADO", numeroDigitoAnoUnificado = unificado, 
+               foroNumeroUnificado = codigo, dePesquisaNuUnificado = processo, 
+               dePesquisa = "", uuidCaptcha = "", pbEnviar = "Pesquisar")
+  
+  conteudo <- httr::RETRY("GET", url = url, query = query1, 
+                         quiet = TRUE, httr::timeout(2)) |>
+              httr::content("parsed") |>
+              rvest::html_elements(".line-clamp__2")|>
+              rvest::html_nodes(":contains('Comarca')") |>
+              rvest:: html_text()|>
+              str_split(" / ") |>
+              as_vector()
+
+  conteudo[1] <- gsub("Comarca de (.+)", "\\1", conteudo[1])
+  conteudo[3] <- codigo
+  conteudo[4] <- processo
+  conteudo <- rev(conteudo)
+
+  return(conteudo)
+}
+
+codigos_faltantes <- map(codigos_faltantes$Processo, busca_foro)
+
+#Convertendo as listas aninhadas em um só df
+codigos_faltantes <- data.frame(Reduce(rbind, codigos_faltantes))
+names(codigos_faltantes) <- c("processo", "codigo", "descr", "comarca")
+
+
+# save(codigos_faltantes, file="Documentos/faltantes.RData")
+# load(here::here("Documentos", "faltantes.RData"))
+# 
+# filter(distribuicao_df, Codigo == "0074")
+# 
+# save(codigos, file="Documentos/codigos_sp.RData")
+
