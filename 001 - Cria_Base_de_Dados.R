@@ -12,7 +12,6 @@
   # load(here::here("Documentos", "Distribuicao_dlc.RData"))
     # Contém uma lista aninhada para cada cargo que recebeu processos em certa data
     
-
   # load(here::here("Documentos", "Distribuicao_padrao.RData"))
     # Contém lista aninhada após iteraçao para lidar com processos distribuidos
     # à Secretaria Executiva e não para um cargo específico
@@ -284,83 +283,82 @@ View(distribuicao_padrao$'354')
 View(distribuicao_padrao$'7231')
 
 distribuicao_df <- distribuicao_padrao |>
-  map_dfr(~ .x, .id = "Pagina") |> 
+  
   # "map_dfr" cria um df a partir da junção de todas a linhas de todas as listas
   # ".id" cria uma variável contendo o nome de cada sub lista
-  
-  mutate(Pagina = as.numeric(Pagina)) |>
-  # Modificando o tipo da Variável "Página" para valores numéricos
-  
-  group_by(Pagina) |>
+  map_dfr(~ .x, .id = "pagina") |> 
+
+  # Modificando o tipo da Variável "Página" para valores numéricos  
+  mutate(pagina = as.numeric(pagina)) |>
+
   # Estamos agrupando os dados conforme a variável "Página" recém criada
+  group_by(pagina) |>
   
-  summarise(Cargo = str_replace(Linha[str_detect(Linha,
+  
+  summarise(cargo = str_replace(Linha[str_detect(Linha,
                     "(^\\d{2})º Procurador.+")],
                     "(^\\d{2})º Procurador.+", "\\1") |>
                     as.factor(),
             
-            Processo = str_replace(Linha[str_detect(Linha,
+            processo = str_replace(Linha[str_detect(Linha,
                     "(^\\d{7}.+?\\d{4}.+?\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                     "(^\\d{7}.+?\\d{4}.+?\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1"),
                     # "?" Serve como "Lazy Quantifier" na expressão regular
             
-            Propositura = str_replace(Linha[str_detect(Linha,
+            propositura = str_replace(Linha[str_detect(Linha,
                     "^\\d{7}.+?(\\d{4}).+?\\d{4}.+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                     "^\\d{7}.+?(\\d{4}).+?\\d{4}.+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1") |>
                     as.numeric(),
             
-            Codigo = str_replace(Linha[str_detect(Linha,
+            codigo = str_replace(Linha[str_detect(Linha,
                     "^\\d{7}.+?\\d{4}.+?(\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                     "^\\d{7}.+?\\d{4}.+?(\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1"),
             
-            Tribunal = str_replace(Linha[str_detect(Linha,
+            tribunal = str_replace(Linha[str_detect(Linha,
                      "^\\d{7}.+?\\d{4}\\.(\\d{1}\\.\\d{2}).+\\d{4}.+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                      "^\\d{7}.+?\\d{4}\\.(\\d{1}\\.\\d{2}).+\\d{4}.+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1"),           
 
-            Digital = str_replace(Linha[str_detect(Linha,
+            digital = str_replace(Linha[str_detect(Linha,
                     "^\\d{7}.+?\\d{4}.+?\\d{4}.+?([:upper:]{3,}+).+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                     "^\\d{7}.+?\\d{4}.+?\\d{4}.+?([:upper:]{3,}+)+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1") |>
                     as.factor(),
             
-            Tipo = str_replace(Linha[str_detect(Linha,
+            tipo = str_replace(Linha[str_detect(Linha,
                    "^\\d{7}.+?\\d{4}.+?\\d{4}.+?[:upper:]{3,}.[:digit:]+.*?([:upper:]+[^Não|^Sim]).+\\s+\\d+")],
                    "^\\d{7}.+?\\d{4}.+?\\d{4}.+?[:upper:]{3,}.[:digit:]+.*?([:upper:]+[^Não|^Sim]).+\\s+\\d+", "\\1") |>
                    as.factor(), 
             
-            Natureza = str_replace(Linha[str_detect(Linha,
+            natureza = str_replace(Linha[str_detect(Linha,
                    "^\\d{7}.+?\\d{4}.+?\\d{4}.+?[:upper:]{3,}+.[:digit:]+.*?[:upper:]+\\S+.+?[:upper:]+.+?([:upper:]{2,}\\D*).*\\s+\\d+$")],
                    "^\\d{7}.+?\\d{4}.+?\\d{4}.+?[:upper:]{3,}+.[:digit:]+.*?[:upper:]+\\S+.+?[:upper:]+.+?([:upper:]{2,}\\D*).*\\s+\\d+$", "\\1")|>
                    as.factor(),  
             
-            Data = first(str_replace(Linha[str_detect(Linha,
+            data = first(str_replace(Linha[str_detect(Linha,
                    "^.*\\d{2}/\\d{2}/\\d{2}$")],
                    "^.*(\\d{2}/\\d{2}/\\d{2})$", "\\1")) |>
                    as.Date("%d/%m/%y"),
 
-            # Dia = first(str_replace(Linha[str_detect(Linha,
+            # dia = first(str_replace(Linha[str_detect(Linha,
             #        "^.*\\d{2}/\\d{2}/\\d{2}$")],
             #        "^.*(\\d{2})/\\d{2}/\\d{2}$", "\\1")),
-            # Mes = first(str_replace(Linha[str_detect(Linha,
+            # mes = first(str_replace(Linha[str_detect(Linha,
             #        "^.*\\d{2}/\\d{2}/\\d{2}$")],
             #        "^.*\\d{2}/(\\d{2})/\\d{2}$", "\\1")),
-            # Ano = first(str_replace(Linha[str_detect(Linha,
+            # ano = first(str_replace(Linha[str_detect(Linha,
             #        "^.*\\d{2}/\\d{2}/\\d{2}$")],
             #        "^.*\\d{2}/\\d{2}/(\\d{2})$", "\\1")),
             .groups = "drop")|>
-  select(Cargo, Processo, Propositura, Codigo, Tribunal, Digital, Tipo, Natureza, Data, Pagina)|>
-  arrange(Data, Pagina, Cargo)
+  select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
+  arrange(data, pagina, cargo)
 
 
 rm(distribuicao_padrao, distribuicao_dlc)
 
-## Identificando linhas duplicadas
-# Algumas listas apenas retificam distribuições anteriores
+## Removendo informações duplicadas
+  # Algumas listas apenas retificam distribuições anteriores
+  #".keep_all = TRUE" retém todas as colunas da tabela.
+distribuicao_df <- distinct(distribuicao_df, processo, data, .keep_all = TRUE)
 
-duplicados <- distribuicao_df[duplicated(distribuicao_df[, -9]),]
-
-# Removendo informações duplicadas
-distribuicao_df <- anti_join(distribuicao_df, duplicados)
-rm(duplicados)
 
 save(distribuicao_df, file="Documentos/Distribuicao_df.RData")
 

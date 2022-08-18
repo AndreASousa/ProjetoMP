@@ -364,11 +364,11 @@ rm(nao_comarca, sede_de_comarca, novo, original)
 load(here::here("Documentos", "Distribuicao_df.RData"))
 
 codigos_faltantes <- distribuicao_df |>
-  left_join(codigos, by = c("Codigo" = "codigo")) |>
-  select(Processo, Codigo, Tribunal, comarca) |>
-  filter(is.na(comarca), Tribunal == "8.26") |>
-  distinct(Codigo, .keep_all = TRUE) |>
-  arrange(Codigo)
+  left_join(codigos, by = "codigo") |>
+  select(processo, codigo, tribunal, comarca) |>
+  filter(is.na(comarca), tribunal == "8.26") |>
+  distinct(codigo, .keep_all = TRUE) |>
+  arrange(codigo)
 
 
 #2 - Efetuando Raspagem de Dados no sistema do TJSP
@@ -406,7 +406,7 @@ busca_foro <- function(processo = NULL){
   return(conteudo)
 }
 
-codigos_faltantes <- map(codigos_faltantes$Processo, busca_foro)
+codigos_faltantes <- map(codigos_faltantes$processo, busca_foro)
 
 #3 - Convertendo as listas aninhadas em um só df
 codigos_faltantes <- data.frame(Reduce(rbind, codigos_faltantes))
@@ -471,11 +471,11 @@ codigos |>
   # "8.26"
 
 View(distribuicao_df |>
-  left_join(codigos, by = c("Codigo" = "codigo")) |>
-  select(Processo, Codigo, Tribunal, comarca) |>
+  left_join(codigos, by = "codigo") |>
+  select(processo, codigo, tribunal, comarca) |>
   filter(is.na(comarca)) |>
-  distinct(Codigo, .keep_all = TRUE) |>
-  arrange(Codigo))
+  distinct(codigo, .keep_all = TRUE) |>
+  arrange(codigo))
 
 rm(codigos_faltantes, adicionados)
 

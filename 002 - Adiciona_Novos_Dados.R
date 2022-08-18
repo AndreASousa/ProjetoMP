@@ -115,76 +115,71 @@ for(n in 1:length(distribuicao_dl_nd)){
 
 
 rm(n, outros)
-save(distribuicao_dl_nd, file="Documentos/distribuicao_dl_nd.RData")
-
-load(here::here("Documentos", "distribuicao_dl_nd.RData"))
 
 ################################################################################
 #                    EXTRAÇÃO DE VARIÁVEIS RELEVANTES                          #
 ################################################################################
 
 distribuicao_df_nd <- distribuicao_dl_nd |>
-  map_dfr(~ .x, .id = "Pagina") |> 
-  mutate(Pagina = as.numeric(Pagina)) |>
-  group_by(Pagina) |>
-  summarise(Cargo = str_replace(Linha[str_detect(Linha,
+  map_dfr(~ .x, .id = "pagina") |> 
+  mutate(Pagina = as.numeric(pagina)) |>
+  group_by(pagina) |>
+  summarise(cargo = str_replace(Linha[str_detect(Linha,
                     "(^\\d{2})º Procurador.+")],
                     "(^\\d{2})º Procurador.+", "\\1") |>
                      as.factor(),
             
-            Processo = str_replace(Linha[str_detect(Linha,
+            processo = str_replace(Linha[str_detect(Linha,
                      "(^\\d{7}.+?\\d{4}.+?\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                      "(^\\d{7}.+?\\d{4}.+?\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1"),
             
-            Propositura = str_replace(Linha[str_detect(Linha,
+            propositura = str_replace(Linha[str_detect(Linha,
                       "^\\d{7}.+?(\\d{4}).+?\\d{4}.+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                       "^\\d{7}.+?(\\d{4}).+?\\d{4}.+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1") |>
                       as.numeric(),
             
-            Codigo = str_replace(Linha[str_detect(Linha,
+            codigo = str_replace(Linha[str_detect(Linha,
                       "^\\d{7}.+?\\d{4}.+?(\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                       "^\\d{7}.+?\\d{4}.+?(\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1"),
 
-            Tribunal = str_replace(Linha[str_detect(Linha,
+            tribunal = str_replace(Linha[str_detect(Linha,
                       "^\\d{7}.+?\\d{4}\\.(\\d{1}\\.\\d{2}).+\\d{4}.+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                       "^\\d{7}.+?\\d{4}\\.(\\d{1}\\.\\d{2}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1"), 
 
-            Digital = str_replace(Linha[str_detect(Linha,
+            digital = str_replace(Linha[str_detect(Linha,
                       "^\\d{7}.+?\\d{4}.+?\\d{4}.+?([:upper:]{3,}+).+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                       "^\\d{7}.+?\\d{4}.+?\\d{4}.+?([:upper:]{3,}+)+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1") |>
                       as.factor(),
             
-            Tipo = str_replace(Linha[str_detect(Linha,
+            tipo = str_replace(Linha[str_detect(Linha,
                       "^\\d{7}.+?\\d{4}.+?\\d{4}.+?[:upper:]{3,}.[:digit:]+.*?([:upper:]+[^Não|^Sim]).+\\s+\\d+")],
                       "^\\d{7}.+?\\d{4}.+?\\d{4}.+?[:upper:]{3,}.[:digit:]+.*?([:upper:]+[^Não|^Sim]).+\\s+\\d+", "\\1") |>
                       as.factor(), 
             
-            Natureza = str_replace(Linha[str_detect(Linha,
+            natureza = str_replace(Linha[str_detect(Linha,
                       "^\\d{7}.+?\\d{4}.+?\\d{4}.+?[:upper:]{3,}+.[:digit:]+.*?[:upper:]+\\S+.+?[:upper:]+.+?([:upper:]{2,}\\D*).*\\s+\\d+$")],
                       "^\\d{7}.+?\\d{4}.+?\\d{4}.+?[:upper:]{3,}+.[:digit:]+.*?[:upper:]+\\S+.+?[:upper:]+.+?([:upper:]{2,}\\D*).*\\s+\\d+$", "\\1")|>
                       as.factor(),  
             
-            Data = first(str_replace(Linha[str_detect(Linha,
+            data = first(str_replace(Linha[str_detect(Linha,
                       "^.*\\d{2}/\\d{2}/\\d{2}$")],
                       "^.*(\\d{2}/\\d{2}/\\d{2})$", "\\1")) |>
                       as.Date("%d/%m/%y"),
 
             .groups = "drop")|>
-  select(Cargo, Processo, Propositura, Codigo, Tribunal, Digital, Tipo, Natureza, Data, Pagina)|>
-  arrange(Data, Pagina, Cargo)
+  select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
+  arrange(data, pagina, cargo)
 
 rm(distribuicao_dl_nd)
 
 # Unindo à base de dados original
-
 load(here::here("Documentos", "Distribuicao_df.RData"))
 distribuicao_df <- rbind(distribuicao_df, distribuicao_df_nd)
 
 # Removendo duplicidade de dados
+distribuicao_df <- distinct(distribuicao_df, processo, data, .keep_all = TRUE)
 
-duplicados <- distribuicao_df[duplicated(distribuicao_df[, -9]),]
-distribuicao_df <- anti_join(distribuicao_df, duplicados)
-rm(duplicados)
+rm(distribuicao_df_nd)
 
 save(distribuicao_df, file="Documentos/Distribuicao_df.RData")
 

@@ -28,10 +28,10 @@ load(here::here("Documentos", "Distribuicao_df.RData"))
 
 #Vamos abrupar o dataset com base no mês e ano
 distr_mes <- distribuicao_df |> 
-  group_by(mes = floor_date(Data, unit = "month")) |>
+  group_by(mes = floor_date(data, unit = "month")) |>
   summarise(num_proc = n())|>
   ungroup () %>% droplevels(.) |>
-  filter (mes < "2022-07-01") #Vamos excluir o mês em aberto
+  filter (mes < "2022-08-01") #Vamos excluir o mês em aberto
 
 
 ggplot(data = distr_mes) + 
@@ -44,7 +44,7 @@ ggplot(data = distr_mes) +
 
 #Vamos Vizualizar o dataset com base no ano 
 (distr_ano <- distribuicao_df |> 
-  group_by(ano = floor_date(Data, unit = "year")) |>
+  group_by(ano = floor_date(data, unit = "year")) |>
   summarise(num_proc = n())|>
   ungroup () %>% droplevels(.) |>
   filter (ano < "2022-01-01" & ano > "2018-12-01") |>
@@ -58,13 +58,13 @@ ggplot(data = distr_mes) +
 
 #Vamos Aferir quantos cargos ativos e quntos processos por cargo ativo
 distr_cargo <- distribuicao_df |> 
-  filter(Cargo != 99) |> #Excluindo os casos distribuidos à Secretaria
-  group_by(mes = floor_date(Data, unit = "month")) |>
+  filter(cargo != 99) |> #Excluindo os casos distribuidos à Secretaria
+  group_by(mes = floor_date(data, unit = "month")) |>
   summarise(num_proc = n(),
-            c_ativos = n_distinct(Cargo),
+            c_ativos = n_distinct(cargo),
             proc_cargo = num_proc / c_ativos)|>
   ungroup () %>% droplevels(.) |>
-  filter (mes < "2022-07-01") #Vamos excluir o mês em aberto
+  filter (mes < "2022-08-01") #Vamos excluir o mês em aberto
 
 ggplot(data = distr_cargo) + 
   geom_line(aes(x = mes , y = proc_cargo)) + 
@@ -76,10 +76,10 @@ ggplot(data = distr_cargo) +
 
 #Vamos Aferir cargos ativos a cada semana
 distr_cargo_semana <- distribuicao_df |> 
-  filter(Cargo != 99) |> #Excluindo os casos distribuidos à Secretaria
-  group_by(semana = floor_date(Data, unit = "week")) |>
+  filter(cargo != 99) |> #Excluindo os casos distribuidos à Secretaria
+  group_by(semana = floor_date(data, unit = "week")) |>
   summarise(num_proc = n(),
-            c_ativos = n_distinct(Cargo),
+            c_ativos = n_distinct(cargo),
             proc_cargo = num_proc / c_ativos)|>
   ungroup () %>% droplevels(.)
   
@@ -99,32 +99,23 @@ ggplot(data = distr_cargo_semana) +
 
   
 ##Identificar as categorias das variáveis "Natureza" e "Tipo"
-sum(is.na(distribuicao_df$Tipo))
-sum(is.na(distribuicao_df$Natureza))
+sum(is.na(distribuicao_df$tipo))
+sum(is.na(distribuicao_df$natureza))
 
-table(distribuicao_df$Natureza)
-summary(distribuicao_df$Natureza)
+table(distribuicao_df$natureza)
+summary(distribuicao_df$natureza)
 # É possível notar uma certa inconsistência no cadastramento das "Naturezas"
 # A exemplo, ações de alimento aparecem tanto como "ALIMENT" quanto "ALIMENTO"
 
 alimento <- c("ALIMENT", "REVISION", "ALIMENTO", "ALIMPRO", "ALPAREN", "EXE.ALM")
-vinculo_conjugal <- c("ANUL.CAS", )
-# ato_adm
-
-table(distribuicao_df$Tipo)
-
-
-
-view(filter(distribuicao_df, Natureza == "RECU.JU"))
-view(filter(distribuicao_df, Tipo == "SUSP_"))
 
 ## Causas Que Versam sobre o Direito a alimentos
 distr_alimentos <- distribuicao_df |> 
-  filter(Natureza %in% alimento) |> #Excluindo os casos distribuidos à Secretaria
-  group_by(mes = floor_date(Data, unit = "month")) |>
+  filter(natureza %in% alimento) |> #Excluindo os casos distribuidos à Secretaria
+  group_by(mes = floor_date(data, unit = "month")) |>
   summarise(num_proc = n())|>
   ungroup () %>% droplevels(.) |>
-  filter (mes < "2022-07-01") #Vamos excluir o mês em aberto
+  filter (mes < "2022-08-01") #Vamos excluir o mês em aberto
 
 ggplot(data = distr_alimentos) + 
   geom_line(aes(x = mes , y = num_proc)) +
@@ -133,4 +124,5 @@ ggplot(data = distr_alimentos) +
        y = "Processos de Alimentos",
        title = "Processos Envolvendo o Direito a Alimentos")
 
-
+#table(distribuicao_df$tipo)
+#vinculo_conjugal <- c("ANUL.CAS")
