@@ -29,7 +29,7 @@ rm(pacotes)
 # https://servicodados.ibge.gov.br/api/docs/agregados?versao=3#api-bq
 
 #1 - População residente estimada
-url = "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2001|2002|2003|2004|2005|2006|2007|2008|2009|2011|2012|2013|2014|2015|2016|2017|2018|2019|2020|2021/variaveis/9324?localidades=N6[N3[35]]"
+url  <-  "https://servicodados.ibge.gov.br/api/v3/agregados/6579/periodos/2001|2002|2003|2004|2005|2006|2007|2008|2009|2011|2012|2013|2014|2015|2016|2017|2018|2019|2020|2021/variaveis/9324?localidades=N6[N3[35]]"
 
 populacao <- GET(url) |>
   getElement("content") |> #Selecionando "$content"
@@ -41,7 +41,11 @@ extrator <- function(objeto = NULL){
   
   extraido <- objeto[[4]][[1]][[2]][[1]]
   extraido <- cbind(extraido$localidade$id, extraido$serie)
-  extraido <- rename(extraido, "id" = "extraido$localidade$id")
+  
+  if(!is.null(extraido$localidade$id)){
+    extraido <- rename(extraido, "id" = "extraido$localidade$id")
+    }
+  
   return(extraido)
 }
 
@@ -50,15 +54,57 @@ populacao <- extrator(populacao)
 save(populacao, file="Documentos/populacao.RData")
 
 #2 - PIB a preços correntes
-url = "https://servicodados.ibge.gov.br/api/v3/agregados/5938/periodos/2010|2011|2012|2013|2014|2015|2016|2017|2018|2019/variaveis/37?localidades=N6[N3[35]]"
+url  <-  "https://servicodados.ibge.gov.br/api/v3/agregados/5938/periodos/2010|2011|2012|2013|2014|2015|2016|2017|2018|2019/variaveis/37?localidades=N6[N3[35]]"
 
 pib <- GET(url) |>
-  getElement("content") |> #Selecionando "$content"
-  rawToChar() |> #Transforma o conteúdo em um texto
-  iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>#Modifica a codificação para "UTF-8"
-  fromJSON()  #Converte objetos jason para "r"  
-
-pib <- extrator(pib)
+  getElement("content") |>
+  rawToChar() |>
+  iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>
+  fromJSON()|>
+  extrator()
 
 save(pib, file="Documentos/pib.RData")
 
+#3 - Pessoal Ocupado Total
+url <- "https://servicodados.ibge.gov.br/api/v3/agregados/1685/periodos/2006|2007|2008|2009|2010|2011|2012|2013|2014|2015|2016|2017|2018|2019|2020/variaveis/707?localidades=N6[N3[35]]"
+
+ocupados <-  GET(url) |>
+  getElement("content") |> 
+  rawToChar() |> 
+  iconv(to = "latin1//TRANSLIT", from = "UTF-8")  |> 
+  fromJSON() |>
+  extrator()
+
+save(ocupados, file="Documentos/ocupados.RData")
+
+#4 - Salário Médio Mensal
+url <- "https://servicodados.ibge.gov.br/api/v3/agregados/1685/periodos/2006|2007|2008|2009|2010|2011|2012|2013|2014|2015|2016|2017|2018|2019|2020/variaveis/707?localidades=N6[N3[35]]"
+
+salario <-  GET(url) |>
+  getElement("content") |> 
+  rawToChar() |> 
+  iconv(to = "latin1//TRANSLIT", from = "UTF-8")  |> 
+  fromJSON() |>
+  extrator()
+
+save(salario, file="Documentos/salario.RData")
+
+#5 - IDH Municipios 2010
+url  <-  "https://servicodados.ibge.gov.br/api/v1/pesquisas/37/periodos/2010/indicadores/30255/resultados/35xxxx?scope=sub&pt"
+
+idh <- GET(url) |>
+  getElement("content") |> 
+  rawToChar() |> 
+  iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>
+  fromJSON() 
+
+idh <- idh[[2]][[1]]
+idh <- cbind(idh[1], idh$res$'2010')
+idh$idh <- idh$`idh$res$"2010"`
+idh$`idh$res$"2010"` <- NULL
+
+save(idh, file="Documentos/idh.RData")
+
+
+
+  
