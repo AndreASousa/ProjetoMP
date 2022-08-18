@@ -37,17 +37,28 @@ populacao <- GET(url) |>
   iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>#Modifica a codificação para "UTF-8"
   fromJSON()  #Converte objetos jason para "r"
 
-populacao <- populacao[[4]][[1]][[2]][[1]]
-populacao <- cbind(populacao$localidade$id, populacao$serie)
-populacao <- rename(populacao, "id" = "populacao$localidade$id")
+extrator <- function(objeto = NULL){
+  
+  extraido <- objeto[[4]][[1]][[2]][[1]]
+  extraido <- cbind(extraido$localidade$id, extraido$serie)
+  extraido <- rename(extraido, "id" = "extraido$localidade$id")
+  return(extraido)
+}
+
+populacao <- extrator(populacao)
 
 save(populacao, file="Documentos/populacao.RData")
 
-#2 - PIB
-url = "https://servicodados.ibge.gov.br/api/v3/agregados/5938/periodos/2002|2003|2004|2005|2006|2007|2008|2009|2010|2011|2012|2013|2014|2015|2016|2017|2018|2019/variaveis/37|513|517|6575|525?localidades=N6[N3[35]]"
+#2 - PIB a preços correntes
+url = "https://servicodados.ibge.gov.br/api/v3/agregados/5938/periodos/2010|2011|2012|2013|2014|2015|2016|2017|2018|2019/variaveis/37?localidades=N6[N3[35]]"
 
 pib <- GET(url) |>
   getElement("content") |> #Selecionando "$content"
   rawToChar() |> #Transforma o conteúdo em um texto
   iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>#Modifica a codificação para "UTF-8"
   fromJSON()  #Converte objetos jason para "r"  
+
+pib <- extrator(pib)
+
+save(pib, file="Documentos/pib.RData")
+
