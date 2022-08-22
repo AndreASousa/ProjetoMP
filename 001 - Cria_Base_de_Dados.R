@@ -70,12 +70,14 @@ rm(pacotes)
 lista_distribuicao <- list.files("PDFs/Distribuicao", pattern = "pdf$",
                                  recursive = T, full.names = T)
 
-
 ## Cria um arquivo PDF único - Facilita a identificação de erros e permite
 # que este trabalho faça referência a uma página específica.
 #A extração sequecial dos arquivos com lapply() retorna erros
-pdf_combine(input = iconv(lista_distribuicao, to = "latin1//TRANSLIT", from = "UTF-8"), output = "PDFs/Distribuicao_Consolidada.pdf")
 
+# A depender da versão do "R" e do pacote pdftools,
+#  é necessário modificar o "encoding" dos endereços dos arquivos:
+  # pdf_combine(input = iconv(lista_distribuicao_nd, to = "latin1//TRANSLIT", from = "UTF-8"), output = "PDFs/Distribuicao_New_Data.pdf")
+pdf_combine(input = lista_distribuicao, output = "PDFs/Distribuicao_Consolidada.pdf")
 
 rm(lista_distribuicao)
 
@@ -299,11 +301,12 @@ distribuicao_df <- distribuicao_padrao |>
                     "(^\\d{2})º Procurador.+")],
                     "(^\\d{2})º Procurador.+", "\\1") |>
                     as.factor(),
-            
+  
+            # "?" Serve como "Lazy Quantifier" na expressão regular          
             processo = str_replace(Linha[str_detect(Linha,
                     "(^\\d{7}.+?\\d{4}.+?\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
                     "(^\\d{7}.+?\\d{4}.+?\\d{4}).+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+", "\\1"),
-                    # "?" Serve como "Lazy Quantifier" na expressão regular
+
             
             propositura = str_replace(Linha[str_detect(Linha,
                     "^\\d{7}.+?(\\d{4}).+?\\d{4}.+?[:upper:]{3,}+.+?[:upper:]+.+?[:upper:]+.+?[:upper:]+.+?\\s+\\d+")],
@@ -349,16 +352,41 @@ distribuicao_df <- distribuicao_padrao |>
             #        "^.*\\d{2}/\\d{2}/(\\d{2})$", "\\1")),
             .groups = "drop")|>
   select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
-  arrange(data, pagina, cargo)
+  arrange(data, pagina, processo)
 
-
-rm(distribuicao_padrao, distribuicao_dlc)
 
 ## Removendo informações duplicadas
   # Algumas listas apenas retificam distribuições anteriores
-  #".keep_all = TRUE" retém todas as colunas da tabela.
+
+## Contudo,alguns processos podem esnejar mais de uma distribuição em uma mesma data.
+  # Por exemplo, as ações de recuperação judicial e de falência costumam envolver
+  # grande número de credores, cada qual com seus prórios interesses.
+
+  # Uma mesma decisão judicial pode abarcar pedidos formulados por mais de um credor,
+  # Cada um deles pode recorrer para a 2ª Instância para rediscutir sua controvérsia.
+
+  # Por essa razão, não existe duplicidade quando um Procurador recebe a atribuição
+  # para oferecer parecer em dois ou mais recursos relativos ao mesmo processo.
+
+## Em termos práticos, não existe duplicidade quando um mesmo processo aprece
+  # mais de uma vez na mesma lista de distribuição, o que pode ser controlado
+  # pelo número de página no "pdf" geral que criamos.
+
+
+# Identificando todos os processos "duplicados" em uma mesma página de distribuição
+ multiplos_recursos <- distribuicao_df |>
+   filter(duplicated(distribuicao_df[ , c("processo", "pagina")]))
+ 
+# Mantendondo apenas valores distintos no df original
+#".keep_all = TRUE" retém todas as colunas da tabela.
 distribuicao_df <- distinct(distribuicao_df, processo, data, .keep_all = TRUE)
 
+# Devolvendo os processos com mais de um recurso para parecer
+distribuicao_df <- distribuicao_df |>
+  rbind(multiplos_recursos) |>
+  arrange(data, pagina, processo)
+
+rm(distribuicao_padrao, distribuicao_dlc, multiplos_recursos)
 
 save(distribuicao_df, file="Documentos/Distribuicao_df.RData")
 

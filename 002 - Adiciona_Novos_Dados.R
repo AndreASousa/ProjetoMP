@@ -43,11 +43,10 @@ lista_distribuicao_nd <- list.files("PDFs/Distribuicao - Novos Dados", pattern =
                                  recursive = T, full.names = T)
 
 
-## Cria um arquivo PDF único - Facilita a identificação de erros
-#A extração sequecial dos arquivos com lapply() retorna erros
-
-pdf_combine(input = iconv(lista_distribuicao_nd, to = "latin1//TRANSLIT", from = "UTF-8"),
-            output = "PDFs/Distribuicao_New_Data.pdf")
+# A depender da versão do "R" e do pacote pdftools,
+#  é necessário modificar o "encoding" dos endereços dos arquivos:
+# pdf_combine(input = iconv(lista_distribuicao_nd, to = "latin1//TRANSLIT", from = "UTF-8"), output = "PDFs/Distribuicao_New_Data.pdf")
+pdf_combine(input = lista_distribuicao, output = "PDFs/Distribuicao_Consolidada.pdf")
 rm(lista_distribuicao_nd)
 
 
@@ -177,9 +176,16 @@ load(here::here("Documentos", "Distribuicao_df.RData"))
 distribuicao_df <- rbind(distribuicao_df, distribuicao_df_nd)
 
 # Removendo duplicidade de dados
+multiplos_recursos <- distribuicao_df |>
+  filter(duplicated(distribuicao_df[ , c("processo", "pagina")]))
+
 distribuicao_df <- distinct(distribuicao_df, processo, data, .keep_all = TRUE)
 
-rm(distribuicao_df_nd)
+distribuicao_df <- distribuicao_df |>
+  rbind(multiplos_recursos) |>
+  arrange(data, pagina, processo)
+
+rm(distribuicao_df_nd, multiplos_recursos)
 
 save(distribuicao_df, file="Documentos/Distribuicao_df.RData")
 
