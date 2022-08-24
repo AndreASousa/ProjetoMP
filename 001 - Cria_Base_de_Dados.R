@@ -19,7 +19,18 @@
   # load(here::here("Documentos", "Distribuicao_df.RData"))
     # Consiste na base de dados já finalizada
 
-## Até o momento a base de dados é constituida por três tabelas distintas:
+## Esse trabalho intenta seguir as formas normais para a criação do banco de dados:
+  # 1ª Forma normal - Cada linha traz uma informação diferente
+  # 2ª Forma normal - Todas as colunas que não participam da chave primária são
+    # dependentes desta.
+
+  # Por essa razão, os dados não estão aglutinados em uma só tabela, mas 
+    # separados em mais de um data.frame concetável pelas chaves primárias.
+
+  # Os "sujeitos" do bando de dados são a) os números de Processo; b) as Comarcas;
+    # e c) as cidades (identificadas pelo código do IBGE).
+
+## Até o momento a base de dados é constituida pelas seguitnes tabelas:
 
   # load(here::here("Documentos", "Distribuicao_df.RData"))
     # Contém as informações extraidas diretamente das listas de distribuição
@@ -31,6 +42,14 @@
   # load(here::here("Documentos", "codigos_sp.RData"))
     # Vincula cada código de "unidade judiciária" (OOOO) à
     # Comarca a que pertence, bem como a descrição de Foro
+
+  # load(here::here("Documentos", "populacao.RData"))
+  # load(here::here("Documentos", "menor_25.RData"))
+  # load(here::here("Documentos", "maior_60.RData"))
+  # load(here::here("Documentos", "ocupados.RData"))
+  # load(here::here("Documentos", "pib.RData"))
+  # load(here::here("Documentos", "idh.RData"))
+    # Aramazenam dados socioeconômicos dos municípios paulistas
 
 ################################################################################
 #                 INSTALAÇÃO E CARREGAMENTO DE PACOTES NECESSÁRIOS             #

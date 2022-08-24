@@ -34,10 +34,8 @@ pacotes <- c("here",
              "readxl", #Leitura de Planilhas do Excel
              "rvest", #Faz o Webscraping
              "httr",
-             "dplyr",
-             "tidyverse",
-             "jsonlite",
-             "stringr") #Manipulação de expressões regulares
+             "tidyverse", #dplyr, stringr
+             "jsonlite") #Manipulação de expressões regulares
 
 if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
   instalador <- pacotes[!pacotes %in% installed.packages()]
@@ -73,9 +71,19 @@ rm(pacotes)
 municipios_sp <- GET("https://servicodados.ibge.gov.br/api/v1/localidades/estados/35/municipios") |>
   getElement("content") |> #Selecionando "$content"
   rawToChar() |> #Transforma o conteúdo em um texto
-  iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>#Modifica a codificação para "UTF-8"
+  #iconv(to = "latin1//TRANSLIT", from = "UTF-8") |> #Modifica a codificação para "UTF-8"
   fromJSON()|>  #Converte objetos jason para "r"
   select(id, nome)
+
+municipios_sp$id <- as.character(municipios_sp$id)
+
+  #Algumas versões do "R" exigem a conversão do encoding:
+  # municipios_sp <- GET("https://servicodados.ibge.gov.br/api/v1/localidades/estados/35/municipios") |>
+  # getElement("content") |>
+  # rawToChar() |>
+  # iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>
+  # fromJSON()|>
+  # select(id, nome)
 
 #2 - Extraindo o conjunto de comarcas Paulista
 
@@ -83,45 +91,52 @@ comarcas <- rvest::read_html("https://www.tjsp.jus.br/QuemSomos/QuemSomos/Regioe
   rvest::html_elements(".list-group-item") |> # "." para selecionar "classes"
   rvest::html_text()
 
-comarcas <- stringr::str_replace(comarcas[str_detect(comarcas, ".+\\s-.+")],
-                                 "(.+)\\s-.+", "\\1")  |>
-  as.data.frame() 
+# Cada observação segue a seguinte estrutura: "Comarca - Circunscriçao Judiciária"
+# Vamos separar as informações em colunas
 
-colnames(comarcas) <- "comarca"
+comarcas <- str_split_fixed(comarcas, pattern = " - ", n = 2) |>
+  as.data.frame()
+
+colnames(comarcas) <- c("comarca", "cj")
 
 
 #3 - Identificando as sedes de Comarca
 
-sede_de_comarca <- inner_join(municipios_sp, comarcas, by = c("nome" ="comarca"))
+sede_de_comarca <- inner_join(municipios_sp, comarcas[ , 1, drop = FALSE], by = c("nome" ="comarca"))
 
 # Note que "sede_de_comarca" possui um número de observações inferior ao
-  # Total de comarcas do TJSP
-  # Isso ocorre por diferença de grafia
+  # Total de comarcas do TJSP - existe diferença de grafia
 
 grafia <- anti_join(comarcas, sede_de_comarca, by = c("comarca" = "nome"))
-grafia <- grafia[, 1]
 
 # Vila Mimosa não é uma comarca, mas um Fórum Regional da Comarca de Campinas
+comarcas <- filter(comarcas, comarca != "Vila Mimosa",
+                   !comarca %in% grafia[ , 1]) |>
+            arrange(comarca)
 
-comarcas <- filter(comarcas, comarca != "Vila Mimosa") |>
-  arrange(comarca)
+grafia <- filter(grafia, comarca != "Vila Mimosa")
 
 # Vamos adotar a grafia do IBGE
-nova_grafia <- as.data.frame(
-              c("Carapicuíba", "Cerqueira César", "Estrela d'Oeste", 
+nova_grafia <- c("Carapicuíba", "Cerqueira César", "Estrela d'Oeste", 
                  "Palmeira d'Oeste", "Rio Grande da Serra", "Santa Bárbara d'Oeste",
-                 "Santana de Parnaíba", "São Luiz do Paraitinga",
-                 "Santa Rosa de Viterbo"))
-              
-colnames(nova_grafia) <- "comarca"
+                 "Santa Rosa de Viterbo", "Santana de Parnaíba", "São Luiz do Paraitinga")
 
-comarcas <- filter(comarcas, !comarca %in% grafia)
-comarcas <- rbind(comarcas, nova_grafia)
+# CUIDADO!!!! as observações são inseridas de forma sequencial em cada linha,
+# é essencial que os valores em "grafia" e "nova grafia" estejam posicionados
+# na mesma ordem
+grafia$comarca <- nova_grafia
+
+comarcas <- rbind(comarcas, grafia)
 
 sede_de_comarca <- inner_join(municipios_sp, comarcas, by = c("nome" ="comarca"))
+
+# Desejamos manter uma coluna para o nome da cidade e outra para a
+# Comarca a que pertence. No caso, a infromação é a mesma.
 sede_de_comarca$comarca <- sede_de_comarca$nome
+sede_de_comarca <- select(sede_de_comarca, id, nome, comarca, cj)
 
 rm(nova_grafia, grafia)
+
 
 #4 - Vinculando os demais Municípios paulistas à respectiva comarca
 
@@ -168,11 +183,11 @@ busca_comarca <- function(municipio){
 }
 
 # Intentamos o uso da função: 
-  # unicipios_faltantes <- sapply(municipios_faltantes$nome, busca_comarca)
+  # municipios_faltantes <- sapply(municipios_faltantes$nome, busca_comarca)
   # Contudo, a diferença de grafia entre os registros do IBGE e TJSP
   # Resulta no erro "subscript out of bounds"
 
-  # A solução foi o empreo de map() em conjunto com possibly()
+  # A solução foi o emprego de map() em conjunto com possibly()
   # possibly() captura o erro e o converte em NA
 
 municipios_faltantes$comarca <- map(municipios_faltantes$nome, possibly(busca_comarca, NA))
@@ -186,13 +201,18 @@ municipios_faltantes$comarca[municipios_faltantes$nome %in% revisado] <- c("Mogi
 
 municipios_faltantes$comarca <- as.character(municipios_faltantes$comarca)
 
-# "Lindoia" e "Uru" escapam da pesquisa
+# "Lindoia" e "Uru" escapam da pesquisa por corresponderem exatamente a parcela do
+  # nome de outros municípios 
 revisado <- c("Lindóia", "Uru")
 municipios_faltantes$comarca[municipios_faltantes$nome %in% revisado] <- c("Águas de Lindóia", "Pirajuí")
 
 #  A Comarca de Estrela d'Oeste é grafada como "Estrela dOeste pelo sistema do TJSP
+municipios_faltantes$comarca <- gsub("Estrela dOeste",  "Estrela d'Oeste", municipios_faltantes$comarca)
 
-municipios_faltantes$comarca <- gsub("Estrela dOeste",  "Estrela d'Oeste", municipios_faltantes$comarca )
+# Adicionando as respectivas circunscrições judiciárias
+
+municipios_faltantes <- municipios_faltantes |>
+  left_join (comarcas, by = "comarca")
 
 municipios_sp <- rbind(sede_de_comarca, municipios_faltantes)|>
   arrange(nome)
@@ -248,7 +268,7 @@ length(comarcas$comarca) - length(unique(codigos$comarca_antiga))
 
 # Assim, a manutenção como "Comarca de São Paulo" pode ensejar conclusões erradas
   # Quando da análise dos dados, fazendo supor que todo agravo de instrumento,
-  # todo recurso eespecial, todo recurso extraordinário foram ajuizados por
+  # todo recurso eespecial, todo recurso extraordinário foi ajuizado por
   # residentes na Capital
 
 codigos <- codigos |>
@@ -321,7 +341,7 @@ nao_comarca <- anti_join(codigos, municipios_sp, by = "comarca") |>
 #6 - Temos uma lista de cidades que não são sede de comarca
   #Vamos identificar as comarcas pelo cruzamento com a tabela "municipios_sp"
 
-nao_comarca <- left_join(nao_comarca, municipios_sp[ , 2:3], by = c("comarca" = "nome"))
+nao_comarca <- left_join(nao_comarca, municipios_sp[ , c("nome", "comarca")], by = c("comarca" = "nome"))
               
 filter(nao_comarca, is.na(comarca.y))
 
