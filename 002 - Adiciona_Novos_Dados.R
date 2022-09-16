@@ -166,10 +166,19 @@ distribuicao_df_nd <- distribuicao_dl_nd |>
                       as.Date("%d/%m/%y"),
 
             .groups = "drop")|>
+  ungroup () %>% droplevels(.) |>
   select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
   arrange(data, pagina, cargo)
 
 rm(distribuicao_dl_nd)
+
+# Removendo espaçamentos, "-", "_", "." e "/"
+distribuicao_df_nd$tipo <- str_trim(distribuicao_df_nd$tipo)
+distribuicao_df_nd$tipo <- str_replace_all(distribuicao_df_nd$tipo, "-", "")
+distribuicao_df_nd$tipo <- str_replace_all(distribuicao_df_nd$tipo, "_", "")
+distribuicao_df_nd$tipo <- str_replace_all(distribuicao_df_nd$tipo, "/", "")
+distribuicao_df_nd$tipo <- str_replace_all(distribuicao_df_nd$tipo, "\\.", "")
+distribuicao_df_nd$tipo <- as.factor(distribuicao_df_nd$tipo)
 
 # Unindo à base de dados original
 load(here::here("Documentos", "Distribuicao_df.RData"))

@@ -1,5 +1,5 @@
 
-## O Script se destina à criação de duas bases de dados:
+## O Script se destina à criação de duas tabelas:
   # 1. A relação dos códigos de unidades de origem e respectivas comarcas e municípios
   # 2. A relação de municípios dos estado de São Paulo e a comarca a que pertencem
 

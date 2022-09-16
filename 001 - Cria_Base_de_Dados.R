@@ -370,9 +370,17 @@ distribuicao_df <- distribuicao_padrao |>
             #        "^.*\\d{2}/\\d{2}/\\d{2}$")],
             #        "^.*\\d{2}/\\d{2}/(\\d{2})$", "\\1")),
             .groups = "drop")|>
+  ungroup () %>% droplevels(.) |>
   select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
   arrange(data, pagina, processo)
 
+# Removendo espaçamentos, "-", "_", "." e "/"
+distribuicao_df$tipo <- str_trim(distribuicao_df$tipo)
+distribuicao_df$tipo <- str_replace_all(distribuicao_df$tipo, "-", "")
+distribuicao_df$tipo <- str_replace_all(distribuicao_df$tipo, "_", "")
+distribuicao_df$tipo <- str_replace_all(distribuicao_df$tipo, "/", "")
+distribuicao_df$tipo <- str_replace_all(distribuicao_df$tipo, "\\.", "")
+distribuicao_df$tipo <- as.factor(distribuicao_df$tipo)
 
 ## Removendo informações duplicadas
   # Algumas listas apenas retificam distribuições anteriores

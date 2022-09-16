@@ -124,7 +124,6 @@ pib <- GET(url) |>
   fromJSON()|>
   extrator()
 
-
 pib <- organiza(pib)
 
 save(pib, file="Documentos/pib.RData")
@@ -186,14 +185,14 @@ idh <- idh |>
   select(id, idh)
 
 # O procedimento conseguiu vincluar todas as informações ao identificador do IBGE
-count(filter(etario, is.na(id)))
+count(filter(idh, is.na(id)))
 
 save(idh, file="Documentos/idh.RData")
 
 #8 - Faixas Estárias
 
   # Utilizaremos as estimativas do Ministério da Saúde e disponíveis em:
-  # http://tabnet.datasus.gov.br/cgi/tabcgi.exe?popsvs/cnv/popbr.def
+  # http://tabnet.datasus.gov.br/cgi/deftohtm.exe?ibge/cnv/popsvsbr.def
   # Não foi possível a extrassão automatizada dos dados
   # Extraimos as informações referentes aos anos de 2010 e 2021 em arquivos "csv"
 
@@ -222,9 +221,6 @@ etario$ano <- as.character(rep(2006:2021, each = 645))
 
 etario$codigo <- str_sub(etario$Município, end = 6)
 
-# A exclusão do último dígito não gera duplicidade de dados
-length(unique(municipios_sp$codigo))
-
 etario <- left_join(etario, municipios_sp[ , c("id", "codigo")], by = "codigo") |>
           select(id, !c(codigo, Município))
 
@@ -237,9 +233,13 @@ etario <- etario|>
   arrange(ano, id) |>
   select(id, ano, everything(), -Total)
 
-colnames(etario) <- c("id", "ano", "0a4", "5a9", "10a14", "15a19", "20a24",
-                      "25a29", "30a34", "35a39", "40a44", "45a49", "50a54",
-                      "55a59", "60a64", "65a69", "70a74", "75a79", "80mais")
+# Simplificando os nomes das variáveis
+# É necessário que cada uma se inicie com um caractere não numérico, para
+# evitar conflito com algumas funções. Ex. ols_vif_tol()
+
+colnames(etario) <- c("id", "ano", "f0a4", "f5a9", "f10a14", "f15a19", "f20a24",
+                      "f25a29", "f30a34", "f35a39", "f40a44", "f45a49", "f50a54",
+                      "f55a59", "f60a64", "f65a69", "f70a74", "f75a79", "f80mais")
 
 #Converte para valores numéricos
 var_classe <- colnames(etario[ , -1])
@@ -264,20 +264,23 @@ excel_sheets(here("Documentos", "pib_seade.xlsx"))
 pib_seade <- as.data.frame(read_excel(here("Documentos", "pib_seade.xlsx"),
                            sheet = "Mensal 09"))
 
-#Selecionando as colunas correspondentes ao mês, ano e PIB
+# Selecionando as colunas correspondentes ao mês, ano e PIB
 pib_seade <- pib_seade[ , c(1, 2, 7)] |>
   rename("mes" = 1, "ano" = 2, "pib" = 3) |>
-  #Selecionando a diferença percentual do PIB dezembro a dezembro
+  # Selecionando a diferença percentual do PIB dezembro a dezembro
   filter(ano %in% c("2020", "2021"), mes == "Dezembro")
 
+# Convertendo valores de strings para numéricos
+pib_seade$pib <- as.numeric(pib_seade$pib)
+
 pib_2020 <- pib |>
-  filter(ano == "2019")|>
+  filter(ano == 2019)|>
   mutate(pib = round(pib * (1 + pib_seade$pib[1]/100), 0)) |>
-  mutate(ano = "2020")
+  mutate(ano = 2020)
 
 pib_2021 <- pib_2020|>
   mutate(pib = round(pib * (1 + pib_seade$pib[2]/100), 0)) |>
-  mutate(ano = "2021")
+  mutate(ano = 2021)
 
 pib <- rbind(pib, pib_2020, pib_2021)
 
@@ -317,4 +320,30 @@ indicadores <- indicadores |>
     across(-c(id, salario, idh), sum)) |>
   ungroup () %>% droplevels(.)
 
+#3 - Convertendo o PIB nominal em PIB per capta
+indicadores <- indicadores |>
+  mutate(pib = round(pib / populacao, 2)) |>
+  rename(pib_pc = pib)
+
 save(indicadores, file="Documentos/indicadores.RData")
+
+summary(indicadores)
+
+# Número de divórcios concedidos em 1ª instância a casais com filhos menores de idade
+url  <-  "https://servicodados.ibge.gov.br/api/v3/agregados/5936/periodos/2014|2015|2016|2017|2018|2019|2020/variaveis/235?localidades=N6[N3[35]]"
+
+divorcios <- GET(url) |>
+  getElement("content") |>
+  rawToChar() |>
+  iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>
+  fromJSON()|>
+  extrator()
+
+divorcios <- organiza(divorcios)
+divorcios[is.na(divorcios)] <- 0
+
+divorcios <- divorcios |>
+  left_join(municipios_sp[ , c("id", "comarca")], by = "id") |>
+  select(id, comarca, everything())
+
+save(divorcios, file="Documentos/divorcio.RData")
