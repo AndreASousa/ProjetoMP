@@ -1,11 +1,36 @@
+# load(here("Documentos", "ajuizamento.RData"))
+# load(here("Documentos", "ajuizamento_ex_sp.RData"))
+
+# load(here("Documentos", "ajuizamento_fat.RData"))
+# load(here("Documentos", "ajuizamento_fat_ex_sp.RData"))
+
+
 ################################################################################
 #                 INSTALAÇÃO E CARREGAMENTO DE PACOTES NECESSÁRIOS             #
 ################################################################################
 
 pacotes <- c("here",
              "tidyverse",
+             "plotly", #plotly
              "nortest", # Teste de distribuição de variáveis
-             "olsrr" # Diagnóstico de multicolinearidade e heterocelasticidade
+             "olsrr", # Diagnóstico de multicolinearidade e heterocelasticidade
+             
+             "fitdistrplus", # auxilia a identificar a distribuição que melhor se adequa
+             # aos dados 
+            
+             "gamlss",# testa a aderência a diferentes distribuiçoes e retorna
+             # aquela que minimiza o AIC
+             
+             "EnvStats", # teste de aderência à distribuição
+             "correlation", # Combina os coeficientes de correlação e testes
+             "lmtest", # likelihood ratio test para comparação de LL's entre modelos
+             "correlation", # matriz de correlações e p-valores
+             "reshape2",
+             "psych", # Análise fatorial
+             "kableExtra", # Vizualização da tabela
+             "factoextra", # extração e vizualização os eigenvalues
+             "ggrepel",
+             "MASS" #Para rodar modelos do tipo binomial negativo
              )
 
 if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
@@ -20,124 +45,941 @@ if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
 
 rm(pacotes)
 
+# install.packages("VGAM")
+# install.packages("eva")
+
 ################################################################################
-#                        Combinando Bases de Dados                             #
+#                                  FUNÇÕES                                     #
 ################################################################################
 
-load(here("Documentos", "Distribuicao_df.RData"))
-load(here("Documentos", "codigos_sp.RData"))
+qualidade <- function(glm = NULL, df = qual_modelo){
+  
+  #Captura o nome do modelo
+  modelo <- deparse(substitute(glm))
+  #Calcula a Máxima Verossimilhança
+  logl <- lrtest(glm)
+  graus <- logl[2,1]
+  veross <- logl[2,2]
+  akaike <- AIC(glm)
+
+  # linha <- cbind(Modelo, df, ll, AIC)
+  linha <- data.frame("Modelo" = modelo, "df" = graus, "ll" = veross, "AIC" = akaike)
+
+  df <- df |>
+    rbind(linha)
+  
+  return(df)
+}
+
+qual_modelo <- data.frame(matrix(ncol = 4, nrow = 0))
+colnames(qual_modelo) <- c("Modelo", "df", "ll", "AIC")
+
+
+################################################################################
+#                   Analisando a Distribuição da Base                          #
+################################################################################
+
 load(here("Documentos", "indicadores.RData"))
+load(here("Documentos", "codigos_sp.RData"))
 
-ajuizamento <- distribuicao_df |>
-  left_join(codigos[ , c("codigo", "comarca")], by = "codigo") |>
-  filter(tribunal == "8.26",
-         propositura %in% as.character(2006:2020),
-         comarca != "Competência Originária",
-         tipo %in% c("AJ","AP", "AJ", "HDATA", "MI", "RECURSO","REEXAME")) |>
-  distinct(processo, .keep_all = TRUE) |>
-  select(propositura, comarca) |>
-  arrange(propositura, comarca)
+# Lista com os processos que ingressaram na procuradoria em sede de
+  # recurso contra sentença (Criado em 006 - Analise_Quantitativa.R)
+load(here("Documentos", "Recurso_contra_sentenca.RData"))
 
-# Processos de duas Comarcas não alcançaram a Procuradoria
-length(unique(ajuizamento$comarca))
+#1 - Criando a Base de dados de processos sentenciados entre 2016 e 2017
 
-# São as Jurisdições de Icanga e Itupeva
-comarca_zero <- unique(indicadores$comarca[!indicadores$comarca %in% ajuizamento$comarca])
+ # Optamos por selecionar apenas a partir de 1 ano anteriores ao início da base
+  # de dados de distribuição.
+  # Caso contrário, podemos enviesar a análise pela falta dos processos
+  # de anos anteriores que foram distribuidos antes de ago. 2017.
 
-# São comarcas com população estimada de 12.002 e 64.330 habitantes em 2021
-filter(populacao, ano == 2021) |>
-  left_join(municipios_sp, by = "id") |>
-  group_by(comarca) |>
-  summarise(populacao = sum(populacao)) |>
-  arrange(populacao) |>
-  filter(comarca %in% c("Iacanga", "Itupeva"))
-
-# Itupeva foi foro distrital da Comarca de Jundiaí até 2016
-# https://www.itupeva.sp.gov.br/prefeitura/jurisdicao
-
-# O Foro de IAcanga foi inaugurado em 2015
-# https://www.tjsp.jus.br/Noticias/Noticia?codigoNoticia=26252
-
-# Contando o número de processos ajuizados em cada comarca a cada ano
-ajuizamento <- ajuizamento |>
+ajuizamento <- recurso_sentenca |>
+  filter(propositura %in% as.character(2016:2020))|>
+  dplyr::select(propositura, comarca) |>
+  # Contando o número de processos ajuizados em cada comarca a cada ano
   group_by(propositura, comarca) |>
   # Conta o número de processos ajuizados em cada comarca a cada ano
   summarise(num_proc = n()) |>
-  ungroup () %>% droplevels(.)
+  ungroup () %>% droplevels(.)  
 
-# Adicionando o valor de 0 para a contagem de Icanga e Itupeva
+# Adicionando o valor de 0 para o caso de nenhum processo ter ingressado na
+  # Procuradoria originado de uma comarca em um determinado ano
+comarca <- unique(codigos$comarca)
+comarca <- comarca[comarca != "Competência Originária"]
+
 zero <- data.frame(
-  propositura = rep(2006:2020, length(comarca_zero)),
-  comarca = comarca_zero,
-  num_proc = 0)
+  propositura = rep(2017:2020, times = 320),
+  comarca = rep(comarca, each = 4))
 
-ajuizamento <- rbind(ajuizamento, zero)
+zero <- left_join(zero, ajuizamento, by = c("propositura", "comarca"))
 
+zero$num_proc[is.na(zero$num_proc)] <- 0
+
+ajuizamento <- zero
+
+# 11 observações receberam a adição de "0"
+nrow(filter(ajuizamento, num_proc == 0))
+
+# Adicionando os indicadores socioeconômicos de cada comarca
 ajuizamento <- ajuizamento|>
   left_join(indicadores, by = c("propositura" = "ano", "comarca")) |>
-  select(num_proc, everything(), -c(propositura, comarca))
+   dplyr::select(propositura, comarca, num_proc, everything())
+
+rm(comarca, indicadores, recurso_sentenca, zero)
+
+# Base de Dados que exclui a Comarca da capital
+ajuizamento_exsp <- filter(ajuizamento, comarca != "São Paulo")
+
+save(ajuizamento, file="Documentos/ajuizamento.RData")
+save(ajuizamento_exsp, file="Documentos/ajuizamento_ex_sp.RData")
 
 # Estatísticas descritivas univariadas e tabela de frequências
 summary(ajuizamento)
+summary(ajuizamento_ex_sp)
+
+# São Paulo - Média de 5.591, 25% do total
+ajuizamento |> 
+  group_by(comarca) |>
+  summarise(total = sum(num_proc),
+            media = mean(num_proc))|>
+  ungroup () %>% droplevels(.) |>
+  mutate(percentual = total / sum(total)) |>
+  arrange(desc(percentual))
+
+################################################################################
+#                      Distribuição Estatística                                #
+################################################################################
+
+# Visualizando a distribuição
+
+plot(density(ajuizamento$num_proc), main = "Kernel Density das Causas Sentenciadas")
+
+# Histograma da variável dependente
+ggplotly(
+  ajuizamento |>
+    ggplot(aes(x = num_proc,
+               fill = ..count..)) +
+    geom_histogram(bins = round(2 * nrow(ajuizamento) ^ (1 / 3)),
+                   color = "black") +
+    scale_fill_gradient("Contagem",
+                        low = "#440154FF",
+                        high = "#FDE725FF") +
+    labs(x = "Número de Processos",
+         y = "Frequência") +
+    theme_bw()
+)
+
+# Teste de Normalidade Shapiro-Wilk
+  # p_valor < 0.5 - distribuição diferente da curva normal
+shapiro.test(ajuizamento$num_proc)
+
+# Estamos tratando de dados de contagem
+  #Será que adere a Poisson ou Binomial Negativa?
+  # Váriância mais de mil vezes superior à média
+  # Não se adequa à distribuição de Poisson
+var(ajuizamento$num_proc) / mean(ajuizamento$num_proc)
+
+# Tentando identificar da distribuição que melhor se adequa aos dados
+# PElo gráfico de Cullen Frey
+# Dentre as possibildiades, mais se aproxima da Distribuição Beta
+  fitdistrplus::descdist(ajuizamento$num_proc)
+
+# utilizando a função gamlss::fitDist() para testar automaticamente
+# diversas distribuições Retorna a que apresenta o menor AIC
+# type = "realline" will test all distributions defined on the whole real line
+# type = "realplus" will only try distributions defined on the real positive line.
+# K = 2 indica que pretendemos selecionar de acordo com o menor AIC
+fit <- fitDist(y = ajuizamento$num_proc, k = 2, type = "realplus", trace = FALSE, try.gamlss = TRUE)
+
+# Distruvyulçai de Pareto Tipo II
+# AIC = 12597
+# Pareto 2o = Ditribuição original de Pareto Tipo 2
+# Sima = is the inverse of the sigma in code PARETO2()
+  # and coresponse to the usual parameter alpha of the Patreto distribution
+# sigma = scale
+# mu = location
+summary(fit)
+
+# Estimando parametros pela máxima verossimilhança
+gamlssML(formula = ajuizamento$num_proc, family = "PARETO2o")
+
+# Estimando parâmetros para distribuição generalizada de pareto
+eva::gpdFit(ajuizamento$num_proc, threshold = 4.32)
+
+# Simulando uma distribuição de pareto com os parâmetros definidos
+pareto <- rPARETO2o(n = 1280, mu = 4.32, sigma = 0.8345)
+plot(density(pareto), col = "red")
+
+# POR FAZER!!!
+# Teste Kolmogorov-Smirnov
+# Admite apenas valores positivos e não repqtidos
+# pvalue < 0.05 -> Hipótese H1, não adere à distribuição de pareto
+# pvalue > 0.05 -> Hipótese H0, aderência à distribuição de pareto
+teste <- filter(ajuizamento, num_proc > 0)|>
+  dplyr::select(num_proc)  |>
+  unique()
+  
+ks.test(x = teste, y = "ppareto", 4.32, 0.8345)
+ks.test(x = teste, y = "ppareto", 4.32, 0.8345)
+?ks.test
+
+EnvStats::gofTest(teste, distribution = "pareto", test = "ks")
+
+# http://soche.cl/chjs/volumes/09/01/Suarez-Espinosa_etal(2018).pdf
 
 # Matriz de Correlações
-rho_ajuizamento <- cor(saude)
+rho_ajuizamento <- cor(ajuizamento[,c(-1, -2)])
 rho_ajuizamento[1, ]
 
+# Teste de Correlação de Pearson
+cor.test(ajuizamento$num_proc, ajuizamento$salario)
+
+# Matriz de correlações e p-valores
+correlation::correlation(ajuizamento[,c(-1, -2)])
+
+# Será que a correlação muda ao selecionarmos apenas um ano?
+teste <- filter(ajuizamento, propositura == "2018")
+rho_teste <- cor(teste[, c(-1, -2)])
+rho_teste[1, ]
+
+# Será que a correlação muda ao excluirmos São Paulo?
+teste <- filter(ajuizamento, comarca != "São Paulo")
+rho_teste <- cor(teste[, c(-1, -2)])
+rho_teste[1, ]
+
+correlation::correlation(teste[,c(-1, -2)])
+cor.test(teste$num_proc, teste$salario)
+
+rm(fit, teste, pareto, rho_ajuizamento)
+
+# São Paulo distorce a análise
+ggplot(data = ajuizamento) +
+  geom_point(mapping = aes(x = num_proc, y = populacao)) 
+
+#Sem São Paulo
+ggplotly(ajuizamento |>
+           filter(comarca != "São Paulo")|>
+           ggplot() +
+            geom_point(mapping = aes(x = num_proc, y = populacao), color = "#39568CFF", size = 2.5) +
+            geom_smooth(mapping = aes(x = num_proc, y = populacao),
+                  method = "lm", se = F, size = 2) +
+      xlab("Distância") +
+      ylab("Tempo") +
+      scale_color_manual("Legenda:",
+                         values = "grey50") +
+      theme_classic()
+  )
+
 ################################################################################
-#                   Estimação por Regressão Linear Múltipla                    #
+#                            Análise Fatorial                                  #
 ################################################################################
 
-# Modelagem com todas as variáveis
-ajuizamento_rl <- lm(num_proc ~ . , ajuizamento)
+#1 - Scores Fatoriais para a base - inclusive São Paulo -----------------------
 
-# Parâmetros do modelo
-summary(ajuizamento_rl)
+# Padronização das observações
+  # O algoritmo psych::prcomp(), EXIGE que a a matriz de dados 
+  # esteja padronizada pelo procedimento zscores:
+dados_std <- ajuizamento[ , 4:length(ajuizamento)] |>
+  scale() |> #Padroniza pelo Z-score
+  data.frame() #Deixa em formato de df
 
-#procedimento "stepwise"
-ajuizamento_step <- step(ajuizamento_rl, k = 3.841459)
+# Teste de efericidade de Bartlett
+  # Queremos que a matriz de correlaçãoes seja estatisticamente != 0
+cortest.bartlett(R = dados_std)
 
-summary(ajuizamento_step)
+# Rodando a PCA
+afpc <- prcomp(dados_std)
+summary(afpc)
 
-# Em estudo
-anova(ajuizamento_step)
-# "F value" = é o F calculado. Queremos saber se sua posição no eixo das abssissas
-# está à frente ou atrás do Fcrítico (que separa 95% de confiança para o curso)
-# Queremos excluir a hipótese nula (F calculado < F crítico ou p-value > 0,05)
+# Sumarizando pontos importantes:
+  # Calcula o eigenvalue e mostra a variância compartilhada e cumulativa
+data.frame(eigenvalue = afpc$sdev ^ 2,
+           var_compartilhada = summary(afpc)$importance[2,],
+           var_cumulativa = summary(afpc)$importance[3,]) -> relatorio
 
-# A Hipótese H1 (F calculado > F crítico ou P-value < 0,05 - a área sobre a curva é menor que 5%)
-# Queremos saber se o F calculado é estatísticamente diferente de 0 a 95% de confiança.
+relatorio |> 
+  kable() |>
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 16)
 
-# "Pr" = probability value - é a área embaixo da curva à direita do F calculado
+# O objeto afpc possui os seguintes componentes:
+afpc$sdev # (EIGENVALUES)^(1/2) -> desvio-pardãro dos componentes principais
+afpc$rotation # EIGENVECTORS
+afpc$center # Média padronizada das variáveis
+afpc$scale # desvios-padrão de cada variável utilizadas para a padronização.
+
+#Visualizando os pesos que cada variável tem em cada componente principal 
+#obtido pela PCA (EIGENVECTORS)
+data.frame(afpc$rotation) %>%
+  mutate(var = names(dados_std)) %>%
+  melt(id.vars = "var") %>%
+  mutate(var = factor(var)) %>%
+  ggplot(aes(x = var, y = value, fill = var)) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~variable) +
+  labs(x = NULL, y = NULL, fill = "Legenda:") +
+  scale_fill_viridis_d() +
+  theme_bw()
+
+# Extraindo as Cargas Fatoriais
+k <- sum((afpc$sdev ^ 2) > 1) #Aplicando o critério de Keiser
+
+if(k > 1){
+  cargas_fatoriais <- afpc$rotation[, 1:k] %*% diag(afpc$sdev[1:k])
+} else{
+  cargas_fatoriais <- afpc$rotation[, 1] * (afpc$sdev[1])
+}
+
+# Relatório das CARGAS FATORIAIS e das COMUNALIDADES
+  # Se a comunalidade da variável "salario" para dois fatores é 0.76,
+  # Significa que apenas dois fatores capturaram 76% da variância dessa variável
+data.frame(cargas_fatoriais) |>
+  rename(F1 = X1,
+         F2 = X2) |>
+  mutate(Comunalidades = rowSums(cargas_fatoriais ^ 2)) %>%
+  kable() |>
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 16)
+
+# Plotagem das Cargas Fatoriais
+  #CUIDADO COM O ESPELHAMENTO!
+data.frame(cargas_fatoriais) |>
+  ggplot(aes(x = X1, y = X2)) +
+  geom_point(color = "dodgerblue4") +
+  geom_hline(yintercept = 0, color = "darkgoldenrod3", linetype = "dashed") +
+  geom_vline(xintercept = 0, color = "darkgoldenrod3", linetype = "dashed") +
+  geom_text_repel(label = row.names(cargas_fatoriais)) +
+  labs(x = paste("F1", paste0("(",
+                              round(summary(afpc)$importance[2,1] * 100,
+                                    digits = 2),
+                              "%)")),
+       y = paste("F2", paste0("(",
+                              round(summary(afpc)$importance[2,2] * 100,
+                                    digits = 2),
+                              "%)"))) +
+  theme_bw()
+
+#'Note que F1 explica 87,78% do comportamento dos dados e possui alta correlação
+  # com população, faixas etárias, ocupados, divórcios e número de filhos
+# Por sua vez, F2 explica 7,35% do comportamento dos dados e possui correlação
+# próxima a ZERO com essas mesmas variáveis
+
+# ATENÇÃO, o R faz um ESPELHAMENTO horizontal e vertical para separar os fatores
+# Espelhamento significa mudar o sinal em um plano cartesiano ("-x", "-y" etc)
+# Talvez com o propósito de enfatizar a ideia de ortogonalidade entre os fatores
+
+# Scores Fatoriais
+scores_fatoriais <- t(afpc$rotation)/afpc$sdev
+colnames(scores_fatoriais) <- colnames(dados_std)
+
+# Visualizando os Scores Fatoriais
+scores_fatoriais |>
+  t() |>
+  data.frame() |>
+  rename(PC1 = 1,
+         PC2 = 2) |>
+  dplyr::select(PC1, PC2) |>
+  kable() |>
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 16)
+
+# Devemos efetuar a multiplicação por -1, 
+# visto que os scores fatoriais das observações mais fortes são, por padrão, 
+# apresentados acompanhados do sinal de menos.
+
+F1 <- t(apply(dados_std, 1, function(x) x * scores_fatoriais[1,]))
+F2 <- t(apply(dados_std, 1, function(x) x * scores_fatoriais[2,]))
+
+F1 <- data.frame(F1) %>%
+  mutate(fator1 = rowSums(.) * -1)
+
+F2 <- data.frame(F2) %>%
+  mutate(fator2 = rowSums(.) * -1)
+
+ajuizamento_fat <- ajuizamento|>
+  mutate(f1 = F1$fator1, f2 = F2$fator2) |>
+  dplyr::select(propositura, comarca, num_proc, f1, f2)
+
+
+#2 - Scores Fatoriais para a base - excluindo São Paulo ----------------------
+
+# Padronização das observações
+# O algoritmo psych::prcomp(), EXIGE que a a matriz de dados 
+# esteja padronizada pelo procedimento zscores:
+dados_std <- ajuizamento_exsp[ , 4:length(ajuizamento)] |>
+  scale() |> #Padroniza pelo Z-score
+  data.frame() #Deixa em formato de df
+
+# Teste de efericidade de Bartlett
+# Queremos que a matriz de correlaçãoes seja estatisticamente != 0
+cortest.bartlett(R = dados_std)
+
+# Rodando a PCA
+afpc <- prcomp(dados_std)
+summary(afpc)
+
+# Sumarizando pontos importantes:
+# Calcula o eigenvalue e mostra a variância compartilhada e cumulativa
+data.frame(eigenvalue = afpc$sdev ^ 2,
+           var_compartilhada = summary(afpc)$importance[2,],
+           var_cumulativa = summary(afpc)$importance[3,]) -> relatorio
+
+relatorio |> 
+  kable() |>
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 16)
+
+# O objeto afpc possui os seguintes componentes:
+afpc$sdev # (EIGENVALUES)^(1/2) -> desvio-pardãro dos componentes principais
+afpc$rotation # EIGENVECTORS
+afpc$center # Média padronizada das variáveis
+afpc$scale # desvios-padrão de cada variável utilizadas para a padronização.
+
+#Visualizando os pesos que cada variável tem em cada componente principal 
+#obtido pela PCA (EIGENVECTORS)
+data.frame(afpc$rotation) %>%
+  mutate(var = names(dados_std)) %>%
+  melt(id.vars = "var") %>%
+  mutate(var = factor(var)) %>%
+  ggplot(aes(x = var, y = value, fill = var)) +
+  geom_bar(stat = "identity", color = "black") +
+  facet_wrap(~variable) +
+  labs(x = NULL, y = NULL, fill = "Legenda:") +
+  scale_fill_viridis_d() +
+  theme_bw()
+
+# Extraindo as Cargas Fatoriais
+k <- sum((afpc$sdev ^ 2) > 1) #Aplicando o critério de Keiser
+
+if(k > 1){
+  cargas_fatoriais <- afpc$rotation[, 1:k] %*% diag(afpc$sdev[1:k])
+} else{
+  cargas_fatoriais <- afpc$rotation[, 1] * (afpc$sdev[1])
+}
+
+# Relatório das CARGAS FATORIAIS e das COMUNALIDADES
+# Se a comunalidade da variável "salario" para dois fatores é 0.76,
+# Significa que apenas dois fatores capturaram 76% da variância dessa variável
+data.frame(cargas_fatoriais) |>
+  rename(F1 = X1,
+         F2 = X2) |>
+  mutate(Comunalidades = rowSums(cargas_fatoriais ^ 2)) %>%
+  kable() |>
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 16)
+
+# Plotagem das Cargas Fatoriais
+#CUIDADO COM O ESPELHAMENTO!
+data.frame(cargas_fatoriais) |>
+  ggplot(aes(x = X1, y = X2)) +
+  geom_point(color = "dodgerblue4") +
+  geom_hline(yintercept = 0, color = "darkgoldenrod3", linetype = "dashed") +
+  geom_vline(xintercept = 0, color = "darkgoldenrod3", linetype = "dashed") +
+  geom_text_repel(label = row.names(cargas_fatoriais)) +
+  labs(x = paste("F1", paste0("(",
+                              round(summary(afpc)$importance[2,1] * 100,
+                                    digits = 2),
+                              "%)")),
+       y = paste("F2", paste0("(",
+                              round(summary(afpc)$importance[2,2] * 100,
+                                    digits = 2),
+                              "%)"))) +
+  theme_bw()
+
+# Note que F1 explica 86,56% do comportamento dos dados e possui forte correlação
+# com população, faixas etárias, ocupados, divórcios e número de filhos
+# Por sua vez, F2 explica 6,37% do comportamento dos dados e possui correlação
+# próxima a ZERO com essas mesmas variáveis
+
+# Scores Fatoriais
+scores_fatoriais <- t(afpc$rotation)/afpc$sdev
+colnames(scores_fatoriais) <- colnames(dados_std)
+
+# Visualizando os Scores Fatoriais
+scores_fatoriais |>
+  t() |>
+  data.frame() |>
+  rename(PC1 = 1,
+         PC2 = 2) |>
+  dplyr::select(PC1, PC2) |>
+  kable() |>
+  kable_styling(bootstrap_options = "striped", 
+                full_width = T, 
+                font_size = 16)
+
+# Devemos efetuar a multiplicação por -1, 
+# visto que os scores fatoriais das observações mais fortes são, por padrão, 
+# apresentados acompanhados do sinal de menos.
+
+F1 <- t(apply(dados_std, 1, function(x) x * scores_fatoriais[1,]))
+F2 <- t(apply(dados_std, 1, function(x) x * scores_fatoriais[2,]))
+
+F1 <- data.frame(F1) %>%
+  mutate(fator1 = rowSums(.) * -1)
+
+F2 <- data.frame(F2) %>%
+  mutate(fator2 = rowSums(.) * -1)
+
+ajuizamento_fat_exsp <- ajuizamento_exsp|>
+  mutate(f1 = F1$fator1, f2 = F2$fator2) |>
+  dplyr::select(propositura, comarca, num_proc, f1, f2)
+
+rm(afpc, cargas_fatoriais, dados_std, F1, F2, relatorio, scores_fatoriais, k)
+
+save(ajuizamento_fat, file="Documentos/ajuizamento_fat.RData")
+save(ajuizamento_fat_exsp, file="Documentos/ajuizamento_fat_ex_sp.RData")
+
+################################################################################
+#                         Estimação por Regressão                              #
+################################################################################
+
+#1 - Regressão Linear - Número de Processos X População ------------------------
+
+rs_populacao <- lm(num_proc ~ populacao, ajuizamento)
+
+# Parâmetros do modelo 
+  # Soma dos Erros ao Quadrado (R2) = 0.9779
+  # Estatística F de Snedecor p-valor < 2.2e-16
+  # Rejeitada a Hipótese nula, Beta estatisticamente significante
+  # para esplicar o comportamento de Y
+summary(rs_populacao)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_populacao)
 
 # Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
-sf.test(ajuizamento_step$residuals)
+sf.test(rs_populacao$residuals)
 
-#Plotando os resíduos do modelo com a cuva normal teórica
-ajuizamento |>
-  mutate(residuos = ajuizamento_step$residuals) |>
-  ggplot(aes(x = residuos)) +
-  geom_histogram(color = "white", 
-                 fill = "#55C667FF", 
-                 bins = 15,
-                 alpha = 0.6) +
-  stat_function(fun = dnorm, 
-                args = list(mean = mean(ajuizamento_step$residuals),
-                            sd = sd(ajuizamento_step$residuals)),
-                size = 2, color = "grey30") +
-  scale_color_manual(values = "grey50") +
-  labs(x = "Resíduos",
-       y = "Frequência") +
-  theme_bw()
 
-# Kernel density estimation (KDE) - forma não-paramétrica para estimar a
-# função densidade de probabilidade de uma variável aleatória
-ajuizamento |>
+#2 - Regressão Linear - Número de Processos X População ------------------------
+  # Sem São Paulo
+
+rs_populacao_exsp <- lm(num_proc ~ populacao, ajuizamento_exsp)
+
+# Parâmetros do modelo - R2 = 0.7733
+# Estatística F de Snedecor p-valor < 2.2e-16
+summary(rs_populacao_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_populacao_exsp)
+
+# Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
+sf.test(rs_populacao_exsp$residuals)
+
+
+#3 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados -----------
+
+rlm <- lm(num_proc ~ populacao + salario + idh + pib_pc + ocupados, ajuizamento)
+
+#procedimento "stepwise" - Salario saiu
+rlm <- step(rlm, k = 3.841459)
+
+# R2 = 0.9815
+# Estatística F de Snedecor p-valor < 2.2e-16
+summary(rlm)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rlm)
+
+# Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
+sf.test(rlm$residuals)
+
+
+#4 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados ----------- 
+  # Sem São Paulo
+
+# Modelagem com todas as variáveis
+rlm_exsp <- lm(num_proc ~ populacao + salario + idh + pib_pc + ocupados,
+                       ajuizamento_exsp)
+
+#procedimento "stepwise" - Todas variáveis mantidas
+rlm_exsp <- step(rlm_exsp, k = 3.841459)
+
+# R2 = 0.8185
+# Estatística F de Snedecor p-valor < 2.2e-16
+summary(rlm_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rlm_exsp)
+
+# Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
+sf.test(rlm_exsp$residuals)
+
+
+#5 - Regressão Linear - Score Fatorial -----------------------------------------
+
+rlm_fat <- lm(num_proc ~ f1 + f2,
+              ajuizamento_fat)
+
+#procedimento "stepwise"
+rlm_fat <- step(rlm_fat, k = 3.841459)
+
+# R2 = 0.9793
+# Estatística F de Snedecor p-valor < 2.2e-16
+summary(rlm_fat)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rlm_fat)
+
+# Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
+sf.test(rlm_fat$residuals)
+
+
+#6 - Regressão Linear - Score Fatorial - Sem São Paulo -------------------------
+
+# Modelagem com todas as variáveis
+rlm_fat_exsp <- lm(num_proc ~ f1 + f2,
+                       ajuizamento_fat_exsp)
+
+#procedimento "stepwise" - Score Fatorial 2 Excluído
+rlm_fat_exsp <- step(rlm_fat_exsp, k = 3.841459)
+
+# R2 = 0.7971
+# Estatística F de Snedecor p-valor < 2.2e-16
+summary(rlm_fat_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rlm_fat_exsp)
+
+# Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
+sf.test(rlm_fat_exsp$residuals)
+
+
+#7 - Modelo de Poisson - Número de Processos X População -----------------------
+
+rs_poisson <- glm(formula = num_proc ~  populacao,
+                      data = ajuizamento,
+                      family = "poisson")
+
+# Parâmetros do modelo_poisson
+summary(rs_poisson)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_poisson)
+
+
+#8 - Modelo de Poisson - Número de Processos X População -----------------------
+  # Sem São Paulo
+
+rs_poisson_exsp <- glm(formula = num_proc ~  populacao,
+                  data = ajuizamento_exsp,
+                  family = "poisson")
+
+# Parâmetros do modelo_poisson
+summary(rs_poisson_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_poisson_exsp)
+
+
+#9 - Modelo de Poisson - Processos X População, IDH, PIB_pc, Ocupados ----------
+
+rm_poisson <- glm(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
+                  data = ajuizamento,
+                  family = "poisson")
+
+#procedimento "stepwise" # todos mantidos
+rm_poisson <- step(rm_poisson, k = 3.841459)
+
+# Parâmetros do modelo_poisson
+summary(rm_poisson)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_poisson)
+
+
+#10 - Modelo de Poisson - Processos X População, IDH, PIB_pc, Ocupados ---------
+# Sem São Paulo
+
+rm_poisson_exsp <- glm(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
+                       data = ajuizamento_exsp,
+                       family = "poisson")
+
+#procedimento "stepwise" - todos mantidos
+rm_poisson_exsp <- step(rm_poisson_exsp, k = 3.841459)
+
+# Parâmetros do modelo_poisson
+summary(rm_poisson_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_poisson_exsp)
+
+
+#11 - Modelo de Poisson - Score Fatorial ---------------------------------------
+
+rm_poisson_fat <- glm(formula = num_proc ~  f1 + f2,
+                  data = ajuizamento_fat,
+                  family = "poisson")
+
+#procedimento "stepwise" # todos mantidos
+rm_poisson_fat <- step(rm_poisson_fat, k = 3.841459)
+
+# Parâmetros do modelo_poisson
+summary(rm_poisson_fat)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_poisson_fat)
+
+
+#12 - Modelo de Poisson - Score Fatorial ---------------------------------------
+# Sem São Paulo
+
+rm_poisson_fat_exsp <- glm(formula = num_proc ~ f1 + f2,
+                       data = ajuizamento_fat_exsp,
+                       family = "poisson")
+
+#procedimento "stepwise" - todos mantidos
+rm_poisson_fat_exsp <- step(rm_poisson_fat_exsp, k = 3.841459)
+
+# Parâmetros do modelo_poisson
+summary(rm_poisson_fat_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_poisson_fat_exsp)
+
+
+#13 - Modelo Binomial Negativo - Número de Processos X População ---------------
+
+rs_bneg <- glm.nb(formula = num_proc ~  populacao,
+                  data = ajuizamento)
+
+# Parâmetros do modelo_poisson
+summary(rs_bneg)
+
+# Estatística z de Wald do parâmetro theta para verificação da
+# significância estatística
+rs_bneg$theta / rs_bneg$SE.theta  # maior que 1.96
+# Estamos dividindo "theta" por seu erro padrão
+# Essa distribuição regride à distribuição normal padrão.
+# Portanto, se maior do que o valor crítico de 1.96, ele é estatisticamente significante.
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_bneg)
+
+
+#14 - Modelo Binomial Negativo - Número de Processos X População ---------------
+# Sem São Paulo
+
+rs_bneg_exsp <- glm.nb(formula = num_proc ~  populacao,
+                       data = ajuizamento_exsp)
+
+# Parâmetros do modelo_poisson
+summary(rs_bneg_exsp)
+
+# Estatística z de Wald 
+rs_bneg_exsp$theta / rs_bneg_exsp$SE.theta
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_bneg_exsp)
+
+
+#15 - Modelo Binomial Negativo - Processos X População, IDH, PIB_pc e ocupados -
+
+rm_bneg <- glm.nb(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
+                  data = ajuizamento)
+
+#procedimento "stepwise" - Excluiu PIB_pc
+rm_bneg <- step(rm_bneg, k = 3.841459)
+
+# Parâmetros do modelo_poisson
+summary(rm_bneg)
+
+# Estatística z de Wald 
+rm_bneg$theta / rm_bneg$SE.theta
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_bneg)
+
+
+#16 - Modelo Binomial Negativo - Processos X População, IDH, PIB_pc e ocupados
+# Sem São Paulo
+
+rm_bneg_exsp <- glm.nb(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
+                       data = ajuizamento_exsp)
+
+#procedimento "stepwise" - Saiu PIB_pc e salario
+rm_bneg_exsp <- step(rm_bneg_exsp, k = 3.841459)
+
+# Parâmetros do modelo_poisson
+summary(rm_bneg_exsp)
+
+# Estatística z de Wald 
+rm_bneg_exsp$theta / rm_bneg_exsp$SE.theta
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_bneg_exsp)
+
+
+#17 - Modelo Binomial Negativo - Score Fatorial --------------------------------
+
+rm_bneg_fat <- glm.nb(formula = num_proc ~  f1 + f2,
+                      data = ajuizamento_fat)
+
+#procedimento "stepwise" # todos mantidos
+rm_bneg_fat <- step(rm_bneg_fat, k = 3.841459)
+
+# Parâmetros do modelo_poisson
+summary(rm_bneg_fat)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_bneg_fat)
+
+
+#18 - Modelo Binomial Negativo - Score Fatorial --------------------------------
+# Sem São Paulo
+
+rm_bneg_fat_exsp <- glm.nb(formula = num_proc ~ f1 + f2,
+                           data = ajuizamento_fat_exsp)
+
+#procedimento "stepwise" - todos mantidos
+rm_bneg_fat_exsp <- step(rm_bneg_fat_exsp, k = 3.841459)
+
+# Parâmetros do modelo_poisson
+summary(rm_bneg_fat_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_bneg_fat_exsp)
+
+save(qual_modelo, file="Documentos/qualidade_modelo.RData")
+
+#19 - Modelo Pareto Tipo II - Número de Processos X População
+
+teste <- VGAM::vglm(num_proc ~ populacao,
+                    family = VGAM::gpd(threshold = 0),
+                    data = ajuizamento, trace = TRUE)
+
+
+################################################################################
+#                           Comparando Modelos                                 #
+################################################################################
+
+
+#Comparando os modelos Poisson e Binomial Negativo
+export_summs(modelo_poisson, modelo_bneg, scale = F, digits = 4,
+             model.names = c("POISSON","BNEG"))
+
+data.frame(LL_Poisson = round(logLik(modelo_poisson), 1),
+           LL_Bneg = round(logLik(modelo_bneg), 1)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", position = "center", 
+                full_width = F, 
+                font_size = 30)
+
+#Likelihoo-ratio test
+lrtest(modelo_poisson, modelo_bneg)
+
+#Gráfico para a comparação dos LL dos modelos Poisson e Binomial Negativo
+my_plot <-
+  data.frame(Poisson = logLik(modelo_poisson),
+             BNeg = logLik(modelo_bneg)) %>% 
+  melt() %>% 
+  ggplot(aes(x = variable, y = value)) +
+  geom_bar(aes(fill = factor(variable)), 
+           stat = "identity",
+           color = "black") +
+  geom_text(aes(label = round(value, digits = 3)), 
+            color = "black", 
+            size = 4, 
+            vjust = -0.5,
+            angle = 90) +
+  scale_fill_manual("Legenda:", values = c("#440154FF", "orange")) +
+  coord_flip() +
+  labs(x = "Estimação",
+       y = "Log-Likelihood") +
+  theme_cowplot()
+my_plot
+
+#Com JPEG
+ggdraw() +
+  draw_image("https://cdn.pixabay.com/photo/2016/08/21/18/48/emoticon-1610518_960_720.png",
+             x = -0.12, y = 0.23, scale = .43) +
+  draw_plot(my_plot)
+
+
+#COMPARAÇÕES ENTRE AS PREVISÕES:
+#Qual seria a quantidade média esperada de violações de trânsito para um país
+#cujo corpo diplomático seja composto por 23 membros, considerando o período
+#anterior à vigência da lei e cujo índice de corrupção seja igual 0.5?
+
+#Modelo Poisson:
+predict(object = modelo_poisson, #linha 144 deste script
+        newdata = data.frame(staff = 23,
+                             post = "no",
+                             corruption = 0.5),
+        type = "response")
+
+#type = "response" já retorna o valor de lambda após a exponenciação de "y"
+
+#Modelo Binomial Negativo:
+predict(object = modelo_bneg,
+        newdata = data.frame(staff = 23,
+                             post = "no",
+                             corruption = 0.5),
+        type = "response")
+
+#type = "response" já dá o valor da variável dependente.
+# vai calcular o vertor e clacular sua exponencial
+
+
+#Qual seria a quantidade média esperada de violações de trânsito para o mesmo
+#país, porém agora considerando a vigência da lei?
+
+#Modelo Poisson:
+predict(object = modelo_poisson,
+        newdata = data.frame(staff = 23,
+                             post = "yes",
+                             corruption = 0.5),
+        type = "response")
+
+#Modelo Binomial Negativo:
+predict(object = modelo_bneg,
+        newdata = data.frame(staff = 23,
+                             post = "yes",
+                             corruption = 0.5),
+        type = "response")
+
+
+#Adicionando os fitted values dos modelos estimados até o momento, para fins de 
+#comparação:
+corruption %>%
+  mutate(fitted_poisson = modelo_poisson$fitted.values,
+         fitted_bneg = modelo_bneg$fitted.values) %>% 
+  dplyr::select(country, code, violations, fitted_poisson, 
+                fitted_bneg) %>% 
+  kable() %>%
+  kable_styling(bootstrap_options = "striped", 
+                full_width = F, 
+                font_size = 19)
+
+
+#Fitted values dos modelos POISSON e BINOMIAL NEGATIVO, considerando,
+#para fins didáticos, apenas a variável preditora 'staff':
+corruption %>%
   ggplot() +
-  geom_density(aes(x = ajuizamento_step$residuals), fill = "#55C667FF") +
-  labs(x = "Resíduos do Modelo Stepwise",
-       y = "Densidade") +
-  theme_bw()
+  geom_point(aes(x = staff, y = violations), alpha = 0.5, size = 2) +
+  geom_smooth(aes(x = staff, y = modelo_poisson$fitted.values,
+                  color = "POISSON"), se = F, size = 1.5) +
+  geom_smooth(aes(x = staff, y = modelo_bneg$fitted.values,
+                  color = "BNEG"), se = F, size = 1.5) + 
+  scale_color_manual("Estimação:",
+                     values = c("orange", "#440154FF")) +
+  labs(x = "Number of Diplomats (staff)",
+       y = "Unpaid Parking Violations (violations)") +
+  theme(panel.background = element_rect("white"),
+        panel.grid = element_line("grey95"),
+        panel.border = element_rect(NA),
+        legend.position = "bottom")
+
+
+#Note que a variável dependente está na ordenada
+#Note que que, para valores pequenos da variável explicativa, existe pouca diferença
+#entre as duas dispersões.
+#Contudo, a Poisson não captura a cauda longa.
 
 ##################################################################################
 #                        DIAGNÓSTICO DE HETEROCEDASTICIDADE                      #
@@ -175,159 +1017,4 @@ ols_vif_tol(ajuizamento_step)
 #VIF (Variance Inflation Factor) = 1/tolerância
 #VIF varia de 1 a + infinito
 
-################################################################################
-#                    Estudando as Ações de Alimento                            #
-################################################################################
-load(here("Documentos", "alimento.RData"))
-
-# Vinculando cada processo com origem em 1ª instância a sua 
-  # respecticva comarca
-alimento <- alimento |>
-  left_join(codigos[ , c("codigo", "comarca")], by = "codigo") |>
-  filter(tribunal == "8.26",
-         propositura %in% as.character(2006:2020),
-         comarca != "Competência Originária",
-         tipo %in% c("AJ","AP", "AJ", "HDATA", "MI", "RECURSO","REEXAME")) |>
-  distinct(processo, .keep_all = TRUE) |>
-  select(propositura, comarca) |>
-  arrange(propositura, comarca)
-
-# Comarcas sem causas ajuizadas: Icanga e Itupeva
-comarca_zero <- unique(indicadores$comarca[!indicadores$comarca %in% alimento$comarca])
-
-# Agrupando o número de processos ajuizados por ano e comarca:
-alimento <- alimento |>
-  group_by(propositura, comarca) |>
-  # Conta o número de processos ajuizados em cada comarca a cada ano
-  summarise(num_proc = n()) |>
-  ungroup () %>% droplevels(.)  
-
-# Adicionando o valor de 0 para a contagem de Icanga e Itupeva
-zero <- data.frame(
-  propositura = rep(2006:2020, length(comarca_zero)),
-  comarca = comarca_zero,
-  num_proc = 0)
-
-alimento <- rbind(alimento, zero)
-
-# Vinculando os indicadores socioeconômicos aos processos ajuizados
-alimento <- alimento |>
-  left_join(indicadores, by = c("propositura" = "ano", "comarca")) |>
-  select(num_proc, everything(), -c(propositura, comarca))
-
-# Estatísticas descritivas univariadas e tabela de frequências
-summary(alimento)
-
-# Matriz de Correlações
-rho_alimento <- cor(alimento)
-rho_alimento[1, ]
-
-# Modelagem com todas as variáveis
-alimento_rl <- lm(num_proc ~ populacao, alimento)
-
-# Parâmetros do modelo
-summary(alimento_rl)
-
-# Somando o número de pessoas menores de 20 em cada município
-alimento <- alimento |>
-  mutate(menor20 = rowSums(alimento[, 5:8]))
-
-alimento_rl <- lm(num_proc ~ menor20, alimento)
-summary(alimento_rl)
-
-# Somando o número de pessoas menores de 25 em cada município
-alimento <- alimento |>
-  mutate(menor25 = rowSums(alimento[, 5:9]))
-
-alimento_rl <- lm(num_proc ~ menor25, alimento)
-summary(alimento_rl)
-
-alimento_rl <- lm(num_proc ~ ., alimento[ , c(1, 5:21)])
-summary(alimento_rl)
-
-alimento_step <- step(alimento_rl, k = 3.841459)
-
-summary(alimento_step)
-anova(alimento_step)
-sf.test(alimento_step$residuals)
-
-################################################################################
-#                      Estudando as Ações de Saúde                             #
-################################################################################
-load(here("Documentos", "saude.RData"))
-
-# Vinculando cada processo com origem em 1ª instância a sua 
-# respecticva comarca
-saude <- saude |>
-  left_join(codigos[ , c("codigo", "comarca")], by = "codigo") |>
-  filter(tribunal == "8.26",
-         propositura %in% as.character(2006:2020),
-         comarca != "Competência Originária",
-         tipo %in% c("AJ","AP", "AJ", "HDATA", "MI", "RECURSO","REEXAME")) |>
-  distinct(processo, .keep_all = TRUE) |>
-  select(propositura, comarca) |>
-  arrange(propositura, comarca)
-
-# Comarcas sem causas ajuizadas:
-comarca_zero <- unique(indicadores$comarca[!indicadores$comarca %in% saude$comarca])
-
-# Agrupando o número de processos ajuizados por ano e comarca:
-saude <- saude |>
-  group_by(propositura, comarca) |>
-  # Conta o número de processos ajuizados em cada comarca a cada ano
-  summarise(num_proc = n()) |>
-  ungroup () %>% droplevels(.)  
-
-# Adicionando o valor de 0 para a contagem de Icanga e Itupeva
-zero <- data.frame(
-  propositura = rep(2006:2020, length(comarca_zero)),
-  comarca = comarca_zero,
-  num_proc = 0)
-
-saude <- rbind(saude, zero)
-
-# Vinculando os indicadores socioeconômicos aos processos ajuizados
-saude <- saude |>
-  left_join(indicadores, by = c("propositura" = "ano", "comarca")) |>
-  select(num_proc, everything(), -c(propositura, comarca))
-
-# Estatísticas descritivas univariadas e tabela de frequências
-summary(saude)
-
-# Matriz de Correlações
-rho_saude <- cor(saude)
-rho_saude[1, ]
-psych::cortest.bartlett(R = rho_saude)
-
-# Modelagem com todas as variáveis
-saude_rl <- lm(num_proc ~ populacao, saude)
-
-# Parâmetros do modelo
-summary(saude_rl)
-
-# Somando o número de pessoas menores de 20 em cada município
-saude <- saude |>
-  mutate(menor20 = rowSums(saude[, 5:8]))
-
-saude_rl <- lm(num_proc ~ menor20, saude)
-summary(saude_rl)
-
-# Somando o número de pessoas menores de 25 em cada município
-saude <- saude |>
-  mutate(menor25 = rowSums(saude[, 5:9]))
-
-saude_rl <- lm(num_proc ~ menor25, saude)
-summary(saude_rl)
-
-saude_rl <- lm(num_proc ~ ., saude[ , c(1, 5:21)])
-summary(saude_rl)
-
-saude_step <- step(saude_rl, k = 3.841459)
-
-summary(saude_step)
-
-anova(saude_step)
-sf.test(saude_step$residuals)
-
-chart.Correlation(alimento)
 

@@ -90,6 +90,10 @@ load(here("Documentos", "indicadores.RData"))
 summary(distribuicao_df$natureza)
 table(distribuicao_df$natureza)
 
+# 60.199 causas são identificadas como sendo "OBRIG_F", "DIR.OBR", "ATO ADM"
+nrow(distribuicao_df |>
+  filter(natureza %in% c("OBRIG_F", "DIR.OBR", "ATO ADM")))
+
 #2 -  Estimando o conteúdo das ações de obrigação de fazer
 
   # ATENÇÃO!!!!! o procedimento de webscraping exige horas
@@ -279,39 +283,179 @@ saude <- rbind(df1, df2)
 
 rm(df1, df2)
 
-# Ao menos 12,8% de todos os processos dizem respeito ao direito à Saúde (37.734)
-nrow(saude) / nrow(distribuicao_df)
-
 save(saude, file="Documentos/saude.RData")
 
-# Visualizando a evolução do número de processos
-distr_saude <- saude |> 
-  group_by(ano = floor_date(data, unit = "year")) |>
-  summarise(num_proc = n())|>
-  ungroup () %>% droplevels(.) |>
-  filter (ano < "2022-01-01" & ano > "2017-12-31")
 
-ggplot(distr_saude) + 
-  geom_line(aes(x = ano , y = num_proc)) +
-  geom_smooth(aes(x = ano , y = num_proc), method = "lm") +
-  labs(x = "Ano",
-       y = "Processos de Alimentos",
-       title = "Processos Envolvendo o Direito a Alimentos")
 
-# Um incremento de 85,5% entre agosto de 2017 a julho de 2022
-distr_saude <- saude |> 
-  group_by(mes = floor_date(data, unit = "month")) |>
-  summarise(num_proc = n())|>
-  ungroup () %>% droplevels(.) |>
-  filter (mes < "2022-08-01")
 
-m12 <- distr_saude |>
-  group_by(indice = c(0, rep(1:(nrow(distr_saude)-1)%/%12))) |>
-  summarise(num_proc = sum(num_proc))|>
-  ungroup () %>% droplevels(.)
+################################################################################
+#                    Estudando as Ações de Alimento                            #
+################################################################################
+load(here("Documentos", "alimento.RData"))
 
-sum(m12$num_proc)
+# Vinculando cada processo com origem em 1ª instância a sua 
+# respecticva comarca
+alimento <- alimento |>
+  left_join(codigos[ , c("codigo", "comarca")], by = "codigo") |>
+  filter(tribunal == "8.26",
+         propositura %in% as.character(2017:2020),
+         comarca != "Competência Originária",
+         # Atenção! Corrigir esses espaços!
+         tipo %in% c("AJ ","AP ", "RECURSO ","REEXAME ")) |>
+  distinct(processo, .keep_all = TRUE) |>
+  group_by(propositura, comarca) |>
+  summarise(num_proc = n()) |>
+  ungroup () %>% droplevels(.)  
 
-(m12$num_proc[5]/m12$num_proc[1] - 1)*100
+comarca <- unique(codigos$comarca)
+comarca <- comarca[comarca != "Competência Originária"]
 
-rm(distr_saude)
+zero <- data.frame(
+  propositura = rep(2017:2020, times = 320),
+  comarca = rep(comarca, each = 4))
+
+zero <- left_join(zero, alimento, by = c("propositura", "comarca"))
+
+zero$num_proc[is.na(zero$num_proc)] <- 0
+
+alimento <- zero
+
+rm(comarca, zero)
+
+# Vinculando os indicadores socioeconômicos aos processos ajuizados
+alimento <- alimento |>
+  left_join(indicadores, by = c("propositura" = "ano", "comarca"))
+
+# Estatísticas descritivas univariadas e tabela de frequências
+summary(alimento)
+
+# Matriz de Correlações
+rho_alimento <- cor(alimento[, c(-1, -2)])
+rho_alimento[1, ]
+
+correlation::correlation(alimento)
+cor.test(alimento$num_proc, alimento$salario)
+
+# Será que a correlação muda ao excluirmos São Paulo?
+teste <- filter(alimento, comarca != "São Paulo")
+rho_teste <- cor(teste[, c(-1, -2)])
+rho_teste[1, ]
+
+correlation::correlation(teste[,c(-1, -2)])
+cor.test(teste$num_proc, teste$salario)
+
+# Modelagem com todas as variáveis
+alimento_rl <- lm(num_proc ~ populacao, alimento)
+
+# Parâmetros do modelo
+summary(alimento_rl)
+
+# Somando o número de pessoas com até 19 em cada município
+
+alimento <- alimento |>
+  mutate(menor20 = rowSums(alimento[, 11:14]))
+
+alimento_rl <- lm(num_proc ~ menor20, alimento)
+summary(alimento_rl)
+
+# Somando o número de pessoas menores de 25 em cada município
+alimento <- alimento |>
+  mutate(menor25 = rowSums(alimento[, 11:15]))
+
+alimento <- alimento |>
+  mutate(f25a39 = rowSums(alimento[, 16:18]))
+
+alimento_rl <- lm(num_proc ~ menor25, alimento)
+summary(alimento_rl)
+
+alimento_rl <- lm(num_proc ~ ., alimento[ , c(1, 5:21)])
+summary(alimento_rl)
+
+alimento_step <- step(alimento_rl, k = 3.841459)
+
+summary(alimento_step)
+anova(alimento_step)
+sf.test(alimento_step$residuals)
+
+################################################################################
+#                      Estudando as Ações de Saúde                             #
+################################################################################
+load(here("Documentos", "saude.RData"))
+
+# Vinculando cada processo com origem em 1ª instância a sua 
+# respecticva comarca
+saude <- saude |>
+  left_join(codigos[ , c("codigo", "comarca")], by = "codigo") |>
+  filter(tribunal == "8.26",
+         propositura %in% as.character(2006:2020),
+         comarca != "Competência Originária",
+         #Atenção! Note o espaçamento! Modificar Depois
+         tipo %in% c("AJ ","AP ", "AJ ", "RECURSO ","REEXAME ")) |>
+  distinct(processo, .keep_all = TRUE) |>
+  group_by(propositura, comarca) |>
+  summarise(num_proc = n()) |>
+  ungroup () %>% droplevels(.) 
+
+# Comarcas sem causas ajuizadas:
+comarca_zero <- unique(indicadores$comarca[!indicadores$comarca %in% saude$comarca])
+
+# Agrupando o número de processos ajuizados por ano e comarca:
+saude <- saude |>
+  group_by(propositura, comarca) |>
+  # Conta o número de processos ajuizados em cada comarca a cada ano
+  summarise(num_proc = n()) |>
+  ungroup () %>% droplevels(.)  
+
+# Adicionando o valor de 0 para a contagem de Icanga e Itupeva
+zero <- data.frame(
+  propositura = rep(2006:2020, length(comarca_zero)),
+  comarca = comarca_zero,
+  num_proc = 0)
+
+saude <- rbind(saude, zero)
+
+# Vinculando os indicadores socioeconômicos aos processos ajuizados
+saude <- saude |>
+  left_join(indicadores, by = c("propositura" = "ano", "comarca")) |>
+  dplyr::select(num_proc, everything(), -c(propositura, comarca))
+
+# Estatísticas descritivas univariadas e tabela de frequências
+summary(saude)
+
+# Matriz de Correlações
+rho_saude <- cor(saude)
+rho_saude[1, ]
+
+# Modelagem com todas as variáveis
+saude_rl <- lm(num_proc ~ populacao, saude)
+
+# Parâmetros do modelo
+summary(saude_rl)
+
+# Somando o número de pessoas menores de 20 em cada município
+saude <- saude |>
+  mutate(menor20 = rowSums(saude[, 5:8]))
+
+saude_rl <- lm(num_proc ~ menor20, saude)
+summary(saude_rl)
+
+# Somando o número de pessoas menores de 25 em cada município
+saude <- saude |>
+  mutate(menor25 = rowSums(saude[, 5:9]))
+
+saude_rl <- lm(num_proc ~ menor25, saude)
+summary(saude_rl)
+
+saude_rl <- lm(num_proc ~ ., saude[ , c(1, 5:21)])
+summary(saude_rl)
+
+saude_step <- step(saude_rl, k = 3.841459)
+
+summary(saude_step)
+
+anova(saude_step)
+sf.test(saude_step$residuals)
+
+chart.Correlation(alimento)
+
+

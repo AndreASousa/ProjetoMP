@@ -6,8 +6,10 @@ pacotes <- c("here",
              "tidyverse",
              "lubridate",
              "forecast",
-             "prophet") #Utilizado para separar dados por mês e ano
-
+             "prophet",#Utilizado para separar dados por mês e ano
+             "openxlsx" # manipula arquivos ".xlsx"
+             )
+             
 if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
   instalador <- pacotes[!pacotes %in% installed.packages()]
   for(i in 1:length(instalador)) {
@@ -28,11 +30,11 @@ load(here::here("Documentos", "Distribuicao_df.RData"))
 
 #1 - Criando A série temporal
 serie_mensal <- distribuicao_df |>
-  select(processo, data) |>
+  dplyr::select(processo, data) |>
   group_by(mes = floor_date(data, unit = "month")) |>
   summarise(y = n())|>
   ungroup () %>% droplevels(.) |>
-  select(y) |>
+  dplyr::select(y) |>
   ts(start = c(2017,8), end = c(2022,7), frequency = 12)
 
 
@@ -41,7 +43,7 @@ serie_mensal <- distribuicao_df |>
 # vizualizando os dados
 forecast::autoplot(serie_mensal, main = "Nº Processos a Cada Mês", xlab = "Mês", ylab = "Nº de Processos")
 # É possível notar que a sazonalidade permanece constante ao longo do tempo
-# Isso sugere o uso de um "método aditivo" (tendência + sazonalidade + resíduo)
+# Isso sugere o uso de um "método aditivo" 
 
 # Autocorrelação e autocorrelação parcial
 ggtsdisplay(serie_mensal)
@@ -69,7 +71,7 @@ plot(serie_log)
 #5 - Análise de autocorrelação e Autocorrelação Parcial
 
 # Autocorrelação
-acf(serie_mensal, lag.max = 20) #Colocamos uma defasagem máxima de 25 observações.
+acf(serie_mensal, lag.max = 20) #Colocamos uma defasagem máxima de 20 observações.
 # Autocorrelação Parcial
 pacf(serie_mensal, lag.max = 20)
 
@@ -142,11 +144,13 @@ serie_mensal|>
 
 # Teste Dickey-Fuller Aumentado
 tseries::adf.test(serie_mensal)
+tseries::adf.test(diff(serie_mensal, 1))
 tseries::adf.test(serie_log)
 tseries::adf.test(serie_log_difs) 
 
 # Teste Kwiatkowski–Phillips–Schmidt–Shin (KPSS)
 tseries::kpss.test(serie_mensal)
+tseries::kpss.test(diff(serie_mensal, 1))
 tseries::kpss.test(serie_log)
 tseries::kpss.test(serie_log_difs)
 
@@ -163,7 +167,8 @@ amostra_treino <- stats::window(serie_mensal, end = c(2021, 7))
 amostra_teste <- stats::window(serie_mensal, start = c(2021, 8))
 
 #2 - Aplicando a função auto.arima() para identificar os melhores parâmetros
-auto.arima(amostra_treino, trace = TRUE, approximation = FALSE)  
+auto.arima(amostra_treino, trace = TRUE, approximation = FALSE) 
+
 #Modelo Autorregressivo (0,0,0), Modelo de Média Móvel dos Resíduos (0,1,1)
 
 #3 -  Implementando o modelo arima sobre os dados
@@ -178,6 +183,17 @@ previsao <- forecast(modelo, h = 12)
 autoplot(previsao)
 
 #6 - Avaliando o modelo com o RMSE, MAE e MAPE.
+
+# MAPE - erro absoluto do percentual da média
+  # Mede a precisão como uma porcentagem.
+  # Permite a análise relativa entre os modelos.
+
+# RMSE - raiz do erro quadrático médio
+  # Usado para avaliar a medida das diferenças entre os valores (amostra ou população) previstos
+  # por mum modelo ou um estimador e os valores observados
+
+# MAE - erro médio absoluto
+  # Medida de erros entre observações emparelhadas que expressam o mesmo fenômeno
 
 indicadores <- data.frame(matrix(ncol = 3, nrow = 0))
 colnames(indicadores) <- c("mape", "rmse", "mae")
@@ -246,11 +262,29 @@ autoplot(previsao_log)
 indicadores <- qualidade(previsao_log)
 
 ################################################################################
+#                          MODELO HOLT-WINTERS                                 #
+################################################################################
+
+# Suavização Exponencial Holt-Winters
+  # Utilizado para dados com padrões e tendências sazonais.
+
+suav_hw <- HoltWinters(amostra_treino)
+
+previsao_hw <- forecast(suav_hw, h = 12)
+
+autoplot(previsao_hw)
+
+indicadores <- qualidade(previsao_hw)
+
+accuracy(previsao_hw, amostra_teste)
+
+
+################################################################################
 #                            MODELO PROPHET                                    #
 ################################################################################
 
 prophet_mensal <- distribuicao_df |>
-  select(processo, data) |>
+  dplyr::select(processo, data) |>
   group_by(mes = floor_date(data, unit = "month")) |>
   summarise(y = n())|>
   ungroup () %>% droplevels(.) |>
@@ -291,4 +325,27 @@ indicadores <- indicadores |>
 ################################################################################  
 
 indicadores
+
+modelo <- c("Base Original", "1 Defasagem", "Log", "Holt-Winters", "Prophet")
+
+indicadores$modelo <- modelo
+indicadores <- indicadores |>
+  dplyr::select(modelo, everything())
+
+colnames(indicadores) <- toupper(colnames(indicadores))
+
+write.xlsx(indicadores, file = "E:/Andre/DataScience/Projeto MP/Documentos/indicadores_st.xlsx", overwrite = TRUE)
+
+# Optamos pelo modelo ARIMA sobre a Base de Dados Original
+modelo <- Arima(serie_mensal, order = c(0, 0, 0), seasonal = c(0, 1, 1), 
+                include.drift = TRUE)
+
+#4 - Avaliar o modelo a partir dos resíduos
+checkresiduals(modelo)
+
+#5- Fazendo previsões com o modelo 
+previsao <- forecast(modelo, h = 12)
+autoplot(previsao)
+
+args(autoplot)
 

@@ -108,7 +108,7 @@ length(distribuicao_dl)
 View(distribuicao_dl[[3]])
 
 ## Removendo as colunas sem relevância para a análise
-distribuicao_dl <- lapply(distribuicao_dl, select, -c(width, height, space))
+distribuicao_dl <- lapply(distribuicao_dl, dplyr::select, -c(width, height, space))
 
 ## Ordenando os dados a partir do eixo "Y" - ordem crescente
 distribuicao_dl <- lapply(distribuicao_dl, arrange, "y")
@@ -122,7 +122,7 @@ distribuicao_dl <- lapply(distribuicao_dl, spread, x, text)
 ## O eixo "y" só era relevante para odernar as informações textuais
 # conforme a posição em que apareciam no pdf.
 # como o conteúdo já foi ordenado por "linha", podemos excluir a coluna "y"
-distribuicao_dl <- lapply(distribuicao_dl, select, -c(y))
+distribuicao_dl <- lapply(distribuicao_dl, dplyr::select, -c(y))
 
 ## Todos as colunas serão aglutinadas em apenas uma
 distribuicao_dl <- lapply(distribuicao_dl, unite, "Linha",
@@ -371,7 +371,7 @@ distribuicao_df <- distribuicao_padrao |>
             #        "^.*\\d{2}/\\d{2}/(\\d{2})$", "\\1")),
             .groups = "drop")|>
   ungroup () %>% droplevels(.) |>
-  select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
+  dplyr::select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
   arrange(data, pagina, processo)
 
 # Removendo espaçamentos, "-", "_", "." e "/"

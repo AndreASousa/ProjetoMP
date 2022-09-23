@@ -52,10 +52,10 @@ rm(lista_distribuicao_nd)
 
 ## Cria uma lista de data frames a partir de cada página do pdf
 distribuicao_dl_nd <- pdf_data("PDFs/Distribuicao_New_Data.pdf") |>
-                    lapply(select, -c(width, height, space)) |>
+                    lapply(dplyr::select, -c(width, height, space)) |>
                     lapply(arrange, "y") |>
                     lapply(spread, x, text) |>
-                    lapply(select, -c(y)) |>
+                    lapply(dplyr::select, -c(y)) |>
                     lapply(unite, "Linha", sep = " ", na.rm = T)
                       
 
@@ -167,7 +167,7 @@ distribuicao_df_nd <- distribuicao_dl_nd |>
 
             .groups = "drop")|>
   ungroup () %>% droplevels(.) |>
-  select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
+  dplyr::select(cargo, processo, propositura, codigo, tribunal, digital, tipo, natureza, data, pagina)|>
   arrange(data, pagina, cargo)
 
 rm(distribuicao_dl_nd)

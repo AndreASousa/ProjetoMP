@@ -29,6 +29,8 @@ rm(pacotes)
 #                        Extração de Dados Socioeconômicos                     #
 ################################################################################
 
+load(here::here("Documentos", "municipios_sp.RData"))
+
 # As informações quanto ao API do IBGE podem ser acessadas em:
 # https://servicodados.ibge.gov.br/api/docs/agregados?versao=3#api-bq
 
@@ -128,7 +130,7 @@ pib <- organiza(pib)
 
 save(pib, file="Documentos/pib.RData")
 
-#5 - Total de pessoas ocupadas
+#5 - Total de pessoas ocupadas - Cadastro Central de Empresas
 url <- "https://servicodados.ibge.gov.br/api/v3/agregados/1685/periodos/2006|2007|2008|2009|2010|2011|2012|2013|2014|2015|2016|2017|2018|2019|2020/variaveis/707?localidades=N6[N3[35]]"
 
 ocupados <-  GET(url) |>
@@ -142,8 +144,8 @@ ocupados <- organiza(ocupados)
 
 save(ocupados, file="Documentos/ocupados.RData")
 
-#6 - Salário médio mensal
-url <- "https://servicodados.ibge.gov.br/api/v3/agregados/1685/periodos/2006|2007|2008|2009|2010|2011|2012|2013|2014|2015|2016|2017|2018|2019|2020/variaveis/707?localidades=N6[N3[35]]"
+#6 - Salário médio mensal - Cadastro Central de Empresas
+url <- "https://servicodados.ibge.gov.br/api/v3/agregados/1685/periodos/2006|2007|2008|2009|2010|2011|2012|2013|2014|2015|2016|2017|2018|2019|2020/variaveis/1606?localidades=N6[N3[35]]"
 
 salario <-  GET(url) |>
   getElement("content") |> 
@@ -156,7 +158,39 @@ salario <- organiza(salario)
 
 save(salario, file="Documentos/salario.RData")
 
-#7 - IDH Municipios 2010
+#7 - Número de divórcios concedidos em 1ª instância a casais com filhos menores de idade
+  # Pesquisa Estatísticas do Registro Civil
+url  <-  "https://servicodados.ibge.gov.br/api/v3/agregados/5936/periodos/2014|2015|2016|2017|2018|2019|2020/variaveis/235?localidades=N6[N3[35]]"
+
+divorcios <- GET(url) |>
+  getElement("content") |>
+  rawToChar() |>
+  iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>
+  fromJSON()|>
+  extrator()
+
+divorcios <- organiza(divorcios)
+divorcios[is.na(divorcios)] <- 0
+
+save(divorcios, file="Documentos/divorcio.RData")
+
+#8 - Número de filhos menores de idade de casais envolvidos em divórcios
+  # condedidos em 1ª Instância
+url  <-  "https://servicodados.ibge.gov.br/api/v3/agregados/5936/periodos/2014|2015|2016|2017|2018|2019|2020/variaveis/6565?localidades=N6[N3[35]]&classificacao=737[0]"
+
+n_filhos <- GET(url) |>
+  getElement("content") |>
+  rawToChar() |>
+  iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>
+  fromJSON()|>
+  extrator()
+
+n_filhos <- organiza(n_filhos)
+n_filhos[is.na(n_filhos)] <- 0
+
+save(n_filhos, file="Documentos/n_filhos.RData")
+
+#9- IDH Municipios 2010
 url  <-  "https://servicodados.ibge.gov.br/api/v1/pesquisas/37/periodos/2010/indicadores/30255/resultados/35xxxx?scope=sub&pt"
 
 idh <- GET(url) |>
@@ -173,8 +207,6 @@ idh$idh <- as.numeric(idh$idh)
 
 # Os códigos de Município não correspondem exatamente aos do IBGE
 # Falta o último dígito
-load(here::here("Documentos", "municipios_sp.RData"))
-
 municipios_sp$codigo <- str_sub(municipios_sp$id, end = 6)
 
 # A exclusão do último dígito não gera duplicidade de dados
@@ -182,14 +214,14 @@ length(unique(municipios_sp$codigo))
 
 idh <- idh |>
   left_join(municipios_sp[ , c("id", "codigo")], by = c("localidade" = "codigo")) |>
-  select(id, idh)
+  dplyr::select(id, idh)
 
 # O procedimento conseguiu vincluar todas as informações ao identificador do IBGE
 count(filter(idh, is.na(id)))
 
 save(idh, file="Documentos/idh.RData")
 
-#8 - Faixas Estárias
+#10 - Faixas Estárias
 
   # Utilizaremos as estimativas do Ministério da Saúde e disponíveis em:
   # http://tabnet.datasus.gov.br/cgi/deftohtm.exe?ibge/cnv/popsvsbr.def
@@ -222,7 +254,7 @@ etario$ano <- as.character(rep(2006:2021, each = 645))
 etario$codigo <- str_sub(etario$Município, end = 6)
 
 etario <- left_join(etario, municipios_sp[ , c("id", "codigo")], by = "codigo") |>
-          select(id, !c(codigo, Município))
+          dplyr::select(id, !c(codigo, Município))
 
 # O procedimento conseguiu vincluar todas as informações ao identificador do IBGE
 count(filter(etario, is.na(id)))
@@ -231,7 +263,7 @@ count(filter(etario, is.na(id)))
  # pelo Ministério da Saúde. Optamos pelos dados do IBGE.
 etario <- etario|>
   arrange(ano, id) |>
-  select(id, ano, everything(), -Total)
+  dplyr::select(id, ano, everything(), -Total)
 
 # Simplificando os nomes das variáveis
 # É necessário que cada uma se inicie com um caractere não numérico, para
@@ -248,7 +280,7 @@ etario[var_classe] <- lapply(etario[var_classe], as.numeric)
 save(etario, file="Documentos/etario.RData")
 
 
-#9 - PIB municipal - 2020 e 2021
+#11 - PIB municipal - 2020 e 2021
 
 # Utilizaremos as estimativas da Fundação Sistema Estadual de Análise de Dados de São Paulo (SEADE)
 # Aplicaremos o incremento percentual anual no PIB do Estado de São Paulo para estimar os valores
@@ -295,16 +327,21 @@ save(pib, file="Documentos/pib.RData")
 
 #1 - Agrupando os indicadores em uma mesma tabela
 indicadores <- populacao |>
-  filter(ano %in% 2006:2020) |>
+  filter(ano %in% 2014:2020) |>
   left_join(municipios_sp[ , c("id", "comarca")], by = "id") |>
-  left_join(etario, by = c("id",  "ano")) |>
   left_join(pib, by = c("id",  "ano")) |>
   left_join(salario, by = c("id",  "ano")) |>
   left_join(ocupados, by = c("id",  "ano")) |>
   left_join(idh, by = "id") |>
-  select(id, comarca, everything())
+  left_join(divorcios, by = c("id",  "ano")) |>
+  left_join(n_filhos, by = c("id",  "ano")) |>
+  left_join(etario, by = c("id",  "ano")) |>
+  dplyr::select(id, comarca, everything())
 
-# Verificando a consisTência dos dados
+indicadores$divorcios[is.na(indicadores$divorcios)] <- 0
+indicadores$n_filhos[is.na(indicadores$n_filhos)] <- 0
+
+# Verificando a consistência dos dados
 filter_all(indicadores, any_vars(is.na(.)))
 
 #2 -  Calculando os indicadores para cada ano / comarca
@@ -320,6 +357,8 @@ indicadores <- indicadores |>
     across(-c(id, salario, idh), sum)) |>
   ungroup () %>% droplevels(.)
 
+
+
 #3 - Convertendo o PIB nominal em PIB per capta
 indicadores <- indicadores |>
   mutate(pib = round(pib / populacao, 2)) |>
@@ -329,21 +368,3 @@ save(indicadores, file="Documentos/indicadores.RData")
 
 summary(indicadores)
 
-# Número de divórcios concedidos em 1ª instância a casais com filhos menores de idade
-url  <-  "https://servicodados.ibge.gov.br/api/v3/agregados/5936/periodos/2014|2015|2016|2017|2018|2019|2020/variaveis/235?localidades=N6[N3[35]]"
-
-divorcios <- GET(url) |>
-  getElement("content") |>
-  rawToChar() |>
-  iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>
-  fromJSON()|>
-  extrator()
-
-divorcios <- organiza(divorcios)
-divorcios[is.na(divorcios)] <- 0
-
-divorcios <- divorcios |>
-  left_join(municipios_sp[ , c("id", "comarca")], by = "id") |>
-  select(id, comarca, everything())
-
-save(divorcios, file="Documentos/divorcio.RData")

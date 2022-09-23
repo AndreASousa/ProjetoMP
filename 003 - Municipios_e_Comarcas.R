@@ -73,7 +73,7 @@ municipios_sp <- GET("https://servicodados.ibge.gov.br/api/v1/localidades/estado
   rawToChar() |> #Transforma o conteúdo em um texto
   #iconv(to = "latin1//TRANSLIT", from = "UTF-8") |> #Modifica a codificação para "UTF-8"
   fromJSON()|>  #Converte objetos jason para "r"
-  select(id, nome)
+  dplyr::select(id, nome)
 
 municipios_sp$id <- as.character(municipios_sp$id)
 
@@ -83,7 +83,7 @@ municipios_sp$id <- as.character(municipios_sp$id)
   # rawToChar() |>
   # iconv(to = "latin1//TRANSLIT", from = "UTF-8") |>
   # fromJSON()|>
-  # select(id, nome)
+  # dplyr::select(id, nome)
 
 #2 - Extraindo o conjunto de comarcas Paulista
 
@@ -133,7 +133,7 @@ sede_de_comarca <- inner_join(municipios_sp, comarcas, by = c("nome" ="comarca")
 # Desejamos manter uma coluna para o nome da cidade e outra para a
 # Comarca a que pertence. No caso, a infromação é a mesma.
 sede_de_comarca$comarca <- sede_de_comarca$nome
-sede_de_comarca <- select(sede_de_comarca, id, nome, comarca, cj)
+sede_de_comarca <- dplyr::select(sede_de_comarca, id, nome, comarca, cj)
 
 rm(nova_grafia, grafia)
 
@@ -333,10 +333,10 @@ rm(revisado, comarcas, embu_d_a, santana_d_p)
 #5 - Identificando as localidades em "códigos" que não são sede de comarca
 
 sede_de_comarca <- semi_join(codigos, municipios_sp, by = "comarca") |>
-  select(codigo, descr, comarca)
+  dplyr::select(codigo, descr, comarca)
 
 nao_comarca <- anti_join(codigos, municipios_sp, by = "comarca") |>
-  select(codigo, descr, comarca)
+  dplyr::select(codigo, descr, comarca)
 
 #6 - Temos uma lista de cidades que não são sede de comarca
   #Vamos identificar as comarcas pelo cruzamento com a tabela "municipios_sp"
@@ -360,7 +360,7 @@ nao_comarca$comarca.y[nao_comarca$comarca == "Competência Originária"] <- "Com
 
 nao_comarca <- nao_comarca |>
                mutate(comarca = comarca.y) |>
-               select(!comarca.y)
+               dplyr::select(!comarca.y)
 
 codigos <- rbind(sede_de_comarca, nao_comarca)
 
@@ -385,7 +385,7 @@ load(here::here("Documentos", "Distribuicao_df.RData"))
 
 codigos_faltantes <- distribuicao_df |>
   left_join(codigos, by = "codigo") |>
-  select(processo, codigo, tribunal, comarca) |>
+  dplyr::select(processo, codigo, tribunal, comarca) |>
   filter(is.na(comarca), tribunal == "8.26") |>
   distinct(codigo, .keep_all = TRUE) |>
   arrange(codigo)
@@ -471,7 +471,7 @@ codigos <- rbind(codigos,
 n_distinct(codigos$comarca)
 
 anti_join(codigos, municipios_sp, by = "comarca") |>
-  select(codigo, descr, comarca)
+  dplyr::select(codigo, descr, comarca)
 
 # Competência Originária é a designação atribuida aos procedimentos iniciados
   # diretamente no tribunal.
@@ -492,7 +492,7 @@ codigos |>
 
 View(distribuicao_df |>
   left_join(codigos, by = "codigo") |>
-  select(processo, codigo, tribunal, comarca) |>
+  dplyr::select(processo, codigo, tribunal, comarca) |>
   filter(is.na(comarca)) |>
   distinct(codigo, .keep_all = TRUE) |>
   arrange(codigo))
