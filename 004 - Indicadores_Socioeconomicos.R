@@ -358,11 +358,14 @@ indicadores <- indicadores |>
   ungroup () %>% droplevels(.)
 
 
-
 #3 - Convertendo o PIB nominal em PIB per capta
 indicadores <- indicadores |>
   mutate(pib = round(pib / populacao, 2)) |>
   rename(pib_pc = pib)
+
+#4 - Convertendo a população ocupada em fração de população ocupada
+indicadores <- indicadores |>
+  mutate(ocupados = round(ocupados / populacao, 2))
 
 save(indicadores, file="Documentos/indicadores.RData")
 

@@ -1,8 +1,13 @@
 # load(here("Documentos", "ajuizamento.RData"))
-# load(here("Documentos", "ajuizamento_ex_sp.RData"))
+# load(here("Documentos", "ajuizamento_exsp.RData"))
+# load(here("Documentos", "ajuizamento_bc.RData"))
+# load(here("Documentos", "ajuizamento_bc_exsp.RData"))
 
 # load(here("Documentos", "ajuizamento_fat.RData"))
 # load(here("Documentos", "ajuizamento_fat_ex_sp.RData"))
+
+# load(here("Documentos", "qualidade_modelo.RData"))
+
 
 
 ################################################################################
@@ -10,7 +15,7 @@
 ################################################################################
 
 pacotes <- c("here",
-             "tidyverse",
+             "tidyverse", # pacote para manipulacao de dados
              "plotly", #plotly
              "nortest", # Teste de distribuição de variáveis
              "olsrr", # Diagnóstico de multicolinearidade e heterocelasticidade
@@ -30,7 +35,9 @@ pacotes <- c("here",
              "kableExtra", # Vizualização da tabela
              "factoextra", # extração e vizualização os eigenvalues
              "ggrepel",
-             "MASS" #Para rodar modelos do tipo binomial negativo
+             "car", # PowerTransform (transformar boxcox em modelos não lineares)
+             "MASS", #Para rodar modelos do tipo binomial negativo
+             "pscl" # Modelos "Zero-Inflated" e Teste de Vuong
              )
 
 if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
@@ -76,25 +83,33 @@ colnames(qual_modelo) <- c("Modelo", "df", "ll", "AIC")
 
 
 ################################################################################
-#                   Analisando a Distribuição da Base                          #
+#                  Criando a Tabela com dados de Contagem                      #
 ################################################################################
 
-load(here("Documentos", "indicadores.RData"))
+# Tabela com códigos de unidades judiciárias e nome das comarcas
+  # (Criado em: 003 - Municipios_e_Comarcas.R)
 load(here("Documentos", "codigos_sp.RData"))
 
-# Lista com os processos que ingressaram na procuradoria em sede de
-  # recurso contra sentença (Criado em 006 - Analise_Quantitativa.R)
+# Tabela com os indicadores socioeconômicos das comarcas paulistas
+  # (Criado em: 004 - Indicadores_Socioeconomicos.R)
+load(here("Documentos", "indicadores.RData"))
+
+# Tabela com os processos que ingressaram na procuradoria em sede de
+  # recurso contra sentença (Criado em: 006 - Analise_Quantitativa.R)
 load(here("Documentos", "Recurso_contra_sentenca.RData"))
 
-#1 - Criando a Base de dados de processos sentenciados entre 2016 e 2017
+#1 - Criando a Base de dados de processos sentenciados entre 2017 e 2020--------
 
- # Optamos por selecionar apenas a partir de 1 ano anteriores ao início da base
-  # de dados de distribuição.
-  # Caso contrário, podemos enviesar a análise pela falta dos processos
-  # de anos anteriores que foram distribuidos antes de ago. 2017.
+# Optamos por esse perído para evitar o viés causado pelos processos que já
+  # ingressaram antes do início temporal da base de dados, ou os que foram 
+  # ajuizados em 2021 e 2022 e que ainda tramitam em primeira instância;
+# Caso, contrário, poderiams chegar a conclusões equivocadas, como supor que
+  # o númeor de feitos sentenciados era muito menor antes de 2017 ou que caiu
+  # abruptamente em 2021 e 2022 simplesmente por não estarem capturados na
+  # base de dados.
 
 ajuizamento <- recurso_sentenca |>
-  filter(propositura %in% as.character(2016:2020))|>
+  filter(propositura %in% as.character(2017:2020))|>
   dplyr::select(propositura, comarca) |>
   # Contando o número de processos ajuizados em cada comarca a cada ano
   group_by(propositura, comarca) |>
@@ -103,7 +118,10 @@ ajuizamento <- recurso_sentenca |>
   ungroup () %>% droplevels(.)  
 
 # Adicionando o valor de 0 para o caso de nenhum processo ter ingressado na
-  # Procuradoria originado de uma comarca em um determinado ano
+# Procuradoria originado de uma comarca em um determinado ano
+
+# Atenção!!! A transformação por box-cox exige valores positivos
+
 comarca <- unique(codigos$comarca)
 comarca <- comarca[comarca != "Competência Originária"]
 
@@ -118,20 +136,17 @@ zero$num_proc[is.na(zero$num_proc)] <- 0
 ajuizamento <- zero
 
 # 11 observações receberam a adição de "0"
-nrow(filter(ajuizamento, num_proc == 0))
+nrow(filter(ajuizamento0, num_proc == 0))
 
-# Adicionando os indicadores socioeconômicos de cada comarca
+#2 - Adicionando os indicadores socioeconômicos de cada comarca ----------------
 ajuizamento <- ajuizamento|>
   left_join(indicadores, by = c("propositura" = "ano", "comarca")) |>
-   dplyr::select(propositura, comarca, num_proc, everything())
+  dplyr::select(propositura, comarca, num_proc, everything())
 
-rm(comarca, indicadores, recurso_sentenca, zero)
+rm(codigos, comarca, indicadores, recurso_sentenca, zero)
 
-# Base de Dados que exclui a Comarca da capital
+#3 - Tabela que exclui a Comarca da capital ------------------------------------
 ajuizamento_exsp <- filter(ajuizamento, comarca != "São Paulo")
-
-save(ajuizamento, file="Documentos/ajuizamento.RData")
-save(ajuizamento_exsp, file="Documentos/ajuizamento_ex_sp.RData")
 
 # Estatísticas descritivas univariadas e tabela de frequências
 summary(ajuizamento)
@@ -146,8 +161,45 @@ ajuizamento |>
   mutate(percentual = total / sum(total)) |>
   arrange(desc(percentual))
 
+# Estatísticas descritivas univariadas e tabela de frequências
+summary(ajuizamento)
+summary(ajuizamento_ex_sp)
+
+# São Paulo - Média de 5.591, 25% do total
+ajuizamento |> 
+  group_by(comarca) |>
+  summarise(total = sum(num_proc),
+            media = mean(num_proc))|>
+  ungroup () %>% droplevels(.) |>
+  mutate(percentual = total / sum(total)) |>
+  arrange(desc(percentual))
+
+#4 - Transformando a variável dependente pelo lambda de Box-Cox ----------------
+ajuizamento_bc <- ajuizamento |>
+  filter(num_proc != 0)
+
+lambda_bc <- powerTransform(ajuizamento_bc$num_proc)$lambda
+
+ajuizamento_bc <- ajuizamento_bc |>
+  mutate(bc =  boxcoxTransform(ajuizamento_bc$num_proc, lambda = lambda_bc)) |>
+  dplyr::select(propositura, comarca, num_proc, bc, everything())
+
+ajuizamento_bc_exsp <- ajuizamento_exsp |>
+  filter(num_proc != 0)
+
+lambda_bc_exsp <- powerTransform(ajuizamento_bc_exsp$num_proc)$lambda
+
+ajuizamento_bc_exsp <- ajuizamento_bc_exsp |>
+  mutate(bc =  boxcoxTransform(ajuizamento_bc_exsp$num_proc, lambda = lambda_bc_exsp)) |>
+  dplyr::select(propositura, comarca, num_proc, bc, everything())
+
+save(ajuizamento_exsp, file="Documentos/ajuizamento_ex_sp.RData")
+save(ajuizamento_bc_exsp, file="Documentos/ajuizamento_bc_exsp.RData")
+save(ajuizamento, file="Documentos/ajuizamento_bc.RData")
+save(ajuizamento_bc_exsp, file="Documentos/ajuizamento_bc_exsp.RData")
+
 ################################################################################
-#                      Distribuição Estatística                                #
+#                        Distribuição dos Dados                                #
 ################################################################################
 
 # Visualizando a distribuição
@@ -180,7 +232,7 @@ shapiro.test(ajuizamento$num_proc)
 var(ajuizamento$num_proc) / mean(ajuizamento$num_proc)
 
 # Tentando identificar da distribuição que melhor se adequa aos dados
-# PElo gráfico de Cullen Frey
+# Pelo gráfico de Cullen Frey
 # Dentre as possibildiades, mais se aproxima da Distribuição Beta
   fitdistrplus::descdist(ajuizamento$num_proc)
 
@@ -553,7 +605,48 @@ summary(rs_populacao)
 qual_modelo <- qualidade(rs_populacao)
 
 # Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
+  # Será que a variável se comporta de forma linear?
+  # Vamos verificar se os resíduos se adequam à distribuição normal
+  # p-valor < 0.05 (não aderente à normalidade)
 sf.test(rs_populacao$residuals)
+
+#Plotando os residuos
+ajuizamento |>
+  mutate(residuos = rs_populacao$residuals) |>
+  ggplot(aes(x = residuos)) +
+  geom_histogram(color = "white", 
+                 fill = "#440154FF", 
+                 bins = 30,
+                 alpha = 0.6) +
+  labs(x = "Resíduos",
+       y = "Frequência") + 
+  theme_bw()
+
+# Modelo com a variável dependente transformada
+  # Perdeu enormemente a capacidade preditiva
+  # Tampouco adere à normalidade
+rs_populacao_bc <- lm(bc ~ populacao, ajuizamento_bc)
+summary(rs_populacao_bc)
+sf.test(rs_populacao_bc$residuals)
+
+# Isso acontece porque a variável explicativa tampouco adere à normalidade
+shapiro.test(ajuizamento$populacao)
+fitDist(y = ajuizamento$populacao, k = 2, type = "realplus", trace = FALSE, try.gamlss = TRUE)
+
+plot(density(ajuizamento$num_proc), main = "Kernel Density das Causas Sentenciadas")
+plot(density(ajuizamento$populacao), main = "Kernel Density da População")
+
+# O que acontece se transformarmos a variável explicativa?
+lambda <- powerTransform(ajuizamento_bc$populacao)$lambda
+
+temp <- ajuizamento_bc |>
+  mutate(populacao =  boxcoxTransform(ajuizamento_bc$populacao, lambda = lambda))
+
+# O R2 melhora, mas ainda não alcança a regressão linear
+rs_populacao_bc <- lm(bc ~ populacao, temp)
+summary(rs_populacao_bc)
+sf.test(rs_populacao_bc$residuals)
+rm(lambda, rs_populacao_bc)
 
 
 #2 - Regressão Linear - Número de Processos X População ------------------------
@@ -570,6 +663,45 @@ qual_modelo <- qualidade(rs_populacao_exsp)
 
 # Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
 sf.test(rs_populacao_exsp$residuals)
+
+#Plotando os residuos
+ajuizamento_exsp |>
+  mutate(residuos = rs_populacao_exsp$residuals) |>
+  ggplot(aes(x = residuos)) +
+  geom_histogram(color = "white", 
+                 fill = "#440154FF", 
+                 bins = 30,
+                 alpha = 0.6) +
+  labs(x = "Resíduos",
+       y = "Frequência") + 
+  theme_bw()
+
+# Modelo com a variável dependente transformada
+  # Perdeu enormemente a capacidade preditiva
+  # Tampouco adere à normalidade
+rs_populacao_bc_exsp <- lm(bc ~ populacao, ajuizamento_bc_exsp)
+summary(rs_populacao_bc_exsp)
+sf.test(rs_populacao_bc_exsp$residuals)
+
+# Isso acontece porque a variável explicativa tampouco adere à normalidade
+shapiro.test(ajuizamento_exsp$populacao)
+fitDist(y = ajuizamento_exsp$populacao, k = 2, type = "realplus", trace = FALSE, try.gamlss = TRUE)
+
+plot(density(ajuizamento_exsp$num_proc), main = "Kernel Density das Causas Sentenciadas")
+plot(density(ajuizamento_exsp$populacao), main = "Kernel Density da População")
+
+# O que acontece se transformarmos a variável explicativa?
+lambda <- powerTransform(ajuizamento_bc_exsp$populacao)$lambda
+
+temp <- ajuizamento_bc_exsp |>
+  mutate(populacao =  boxcoxTransform(ajuizamento_bc_exsp$populacao, lambda = lambda))
+
+# O R2 melhora, mas ainda não alcança a regressão linear
+  # Resíduos não adetem à normalidade
+rs_populacao_bc_exsp <- lm(bc ~ populacao, temp)
+summary(rs_populacao_bc_exsp)
+sf.test(rs_populacao_bc_exsp$residuals)
+rm(lambda, rs_populacao_bc_exsp)
 
 
 #3 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados -----------
@@ -588,6 +720,8 @@ qual_modelo <- qualidade(rlm)
 
 # Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
 sf.test(rlm$residuals)
+
+
 
 
 #4 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados ----------- 
@@ -751,8 +885,8 @@ rs_bneg <- glm.nb(formula = num_proc ~  populacao,
 # Parâmetros do modelo_poisson
 summary(rs_bneg)
 
-# Estatística z de Wald do parâmetro theta para verificação da
-# significância estatística
+# Estatística z de Wald - para verificação da significância estatística
+  # do parâmetro theta
 rs_bneg$theta / rs_bneg$SE.theta  # maior que 1.96
 # Estamos dividindo "theta" por seu erro padrão
 # Essa distribuição regride à distribuição normal padrão.
@@ -771,7 +905,7 @@ rs_bneg_exsp <- glm.nb(formula = num_proc ~  populacao,
 # Parâmetros do modelo_poisson
 summary(rs_bneg_exsp)
 
-# Estatística z de Wald 
+# Estatística z de Wald
 rs_bneg_exsp$theta / rs_bneg_exsp$SE.theta
 
 # Indicadores de Qualidade do Modelo
@@ -845,15 +979,85 @@ summary(rm_bneg_fat_exsp)
 # Indicadores de Qualidade do Modelo
 qual_modelo <- qualidade(rm_bneg_fat_exsp)
 
-save(qual_modelo, file="Documentos/qualidade_modelo.RData")
+#19 - Modelo Zero-Inflated Poisson (ZIP) --------------------------------------
 
-#19 - Modelo Pareto Tipo II - Número de Processos X População
+zero_poisson <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
+                              | populacao, #pipe
+                              data = ajuizamento,
+                              dist = "poisson")
+
+# Tudo o que vier antes do "pipe" (|) é componente de contagem
+# O que vem depois do pipe é a variável que será investigada como potencial
+# explicativa do comportamento de inflação de zeros
+# Estamos investigando se um indicador populacional baixo explica a inflação de "0"
+
+summary(zero_poisson)
+
+# Teste de Vuong
+vuong(m1 = rm_poisson, m2 = zero_poisson)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(zero_poisson)
+
+
+#20 - Modelo Zero-Inflated Binomial Negativo (ZINB) ----------------------------
+zero_bneg <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
+                           | populacao, #pipe
+                           data = ajuizamento_exsp,
+                           dist = "negbin")
+
+summary(zero_bneg)
+
+# Teste de Vuong
+vuong(m1 = rm_bneg, m2 = zero_bneg)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(zero_bneg)
+
+#21 - Modelo Zero-Inflated Poisson (ZIP) ---------------------------------------
+  # Sem São Paulo
+
+zero_poisson_exsp <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
+                     | populacao, #pipe
+                     data = ajuizamento_exsp,
+                     dist = "poisson")
+
+# Tudo o que vier antes do "pipe" (|) é componente de contagem
+  # O que vem depois do pipe é a variável que será investigada como potencial
+  # explicativa do comportamento de inflação de zeros
+  # Estamos investigando se um indicador populacional baixo explica a inflação de "0"
+
+summary(zero_poisson_exsp)
+
+# Teste de Vuong
+vuong(m1 = rm_poisson_exsp, m2 = zero_poisson_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(zero_poisson_exp)
+
+#22 - Modelo Zero-Inflated Binomial Negativo (ZINB) ----------------------------
+  # Sem São Paulo
+zero_bneg_exsp <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
+                      | populacao, #pipe
+                      data = ajuizamento_exsp,
+                      dist = "negbin")
+
+summary(zero_bneg_exsp)
+
+# Teste de Vuong
+vuong(m1 = rm_bneg_exsp, m2 = zero_bneg_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(zero_bneg_exsp)
+
+
+#23 - Modelo Pareto Tipo II - Número de Processos X População
 
 teste <- VGAM::vglm(num_proc ~ populacao,
                     family = VGAM::gpd(threshold = 0),
                     data = ajuizamento, trace = TRUE)
 
-
+save(qual_modelo, file="Documentos/qualidade_modelo.RData")
 ################################################################################
 #                           Comparando Modelos                                 #
 ################################################################################
