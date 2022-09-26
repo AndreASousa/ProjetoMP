@@ -1,13 +1,9 @@
-# load(here("Documentos", "ajuizamento.RData"))
-# load(here("Documentos", "ajuizamento_exsp.RData"))
-# load(here("Documentos", "ajuizamento_bc.RData"))
-# load(here("Documentos", "ajuizamento_bc_exsp.RData"))
-
-# load(here("Documentos", "ajuizamento_fat.RData"))
-# load(here("Documentos", "ajuizamento_fat_ex_sp.RData"))
-
-# load(here("Documentos", "qualidade_modelo.RData"))
-
+load(here("Documentos", "ajuizamento.RData"))
+load(here("Documentos", "ajuizamento_exsp.RData"))
+load(here("Documentos", "ajuizamento_bc.RData"))
+load(here("Documentos", "ajuizamento_bc_exsp.RData"))
+load(here("Documentos", "ajuizamento_fat.RData"))
+load(here("Documentos", "ajuizamento_fat_exsp.RData"))
 
 
 ################################################################################
@@ -37,7 +33,9 @@ pacotes <- c("here",
              "ggrepel",
              "car", # PowerTransform (transformar boxcox em modelos não lineares)
              "MASS", #Para rodar modelos do tipo binomial negativo
-             "pscl" # Modelos "Zero-Inflated" e Teste de Vuong
+             "pscl", # Modelos "Zero-Inflated" e Teste de Vuong
+             "VGAM", # Modelo de Regressão para distribuição de Pareto
+             "openxlsx" # manipula arquivos ".xlsx"
              )
 
 if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
@@ -52,8 +50,6 @@ if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
 
 rm(pacotes)
 
-# install.packages("VGAM")
-# install.packages("eva")
 
 ################################################################################
 #                                  FUNÇÕES                                     #
@@ -63,14 +59,27 @@ qualidade <- function(glm = NULL, df = qual_modelo){
   
   #Captura o nome do modelo
   modelo <- deparse(substitute(glm))
+  
   #Calcula a Máxima Verossimilhança
-  logl <- lrtest(glm)
-  graus <- logl[2,1]
-  veross <- logl[2,2]
+    #Exige-se uma função diferente para os modelos do pacote VGAM:
+  if(typeof(glm) == "S4"){
+    logl <- VGAM::lrtest(glm)
+    graus <- logl@Body[1,1]
+    veross <- logl@Body[1,2]
+  } else{
+    logl <- lmtest::lrtest(glm)
+    graus <- logl[1,1]
+    veross <- logl[1,2]
+  }
   akaike <- AIC(glm)
+  if(!is.null(deviance(glm))){
+    rse <- sqrt(deviance(glm)/df.residual(glm))
+  } else {
+    rse <- NA
+  }
 
   # linha <- cbind(Modelo, df, ll, AIC)
-  linha <- data.frame("Modelo" = modelo, "df" = graus, "ll" = veross, "AIC" = akaike)
+  linha <- data.frame("Modelo" = modelo, "df" = graus, "ll" = veross, "AIC" = akaike, "RSE" = rse)
 
   df <- df |>
     rbind(linha)
@@ -78,8 +87,8 @@ qualidade <- function(glm = NULL, df = qual_modelo){
   return(df)
 }
 
-qual_modelo <- data.frame(matrix(ncol = 4, nrow = 0))
-colnames(qual_modelo) <- c("Modelo", "df", "ll", "AIC")
+qual_modelo <- data.frame(matrix(ncol = 5, nrow = 0))
+colnames(qual_modelo) <- c("Modelo", "df", "ll", "AIC", "RSE")
 
 
 ################################################################################
@@ -136,7 +145,7 @@ zero$num_proc[is.na(zero$num_proc)] <- 0
 ajuizamento <- zero
 
 # 11 observações receberam a adição de "0"
-nrow(filter(ajuizamento0, num_proc == 0))
+nrow(filter(ajuizamento, num_proc == 0))
 
 #2 - Adicionando os indicadores socioeconômicos de cada comarca ----------------
 ajuizamento <- ajuizamento|>
@@ -150,7 +159,7 @@ ajuizamento_exsp <- filter(ajuizamento, comarca != "São Paulo")
 
 # Estatísticas descritivas univariadas e tabela de frequências
 summary(ajuizamento)
-summary(ajuizamento_ex_sp)
+summary(ajuizamento_exsp)
 
 # São Paulo - Média de 5.591, 25% do total
 ajuizamento |> 
@@ -163,7 +172,7 @@ ajuizamento |>
 
 # Estatísticas descritivas univariadas e tabela de frequências
 summary(ajuizamento)
-summary(ajuizamento_ex_sp)
+summary(ajuizamento_exsp)
 
 # São Paulo - Média de 5.591, 25% do total
 ajuizamento |> 
@@ -193,9 +202,9 @@ ajuizamento_bc_exsp <- ajuizamento_bc_exsp |>
   mutate(bc =  boxcoxTransform(ajuizamento_bc_exsp$num_proc, lambda = lambda_bc_exsp)) |>
   dplyr::select(propositura, comarca, num_proc, bc, everything())
 
-save(ajuizamento_exsp, file="Documentos/ajuizamento_ex_sp.RData")
-save(ajuizamento_bc_exsp, file="Documentos/ajuizamento_bc_exsp.RData")
-save(ajuizamento, file="Documentos/ajuizamento_bc.RData")
+save(ajuizamento, file="Documentos/ajuizamento.RData")
+save(ajuizamento_exsp, file="Documentos/ajuizamento_exsp.RData")
+save(ajuizamento_bc, file="Documentos/ajuizamento_bc.RData")
 save(ajuizamento_bc_exsp, file="Documentos/ajuizamento_bc_exsp.RData")
 
 ################################################################################
@@ -254,6 +263,8 @@ summary(fit)
 
 # Estimando parametros pela máxima verossimilhança
 gamlssML(formula = ajuizamento$num_proc, family = "PARETO2o")
+# Distribuição Binomial Negativa
+gamlssML(formula = ajuizamento$num_proc, family = "NBI")
 
 # Estimando parâmetros para distribuição generalizada de pareto
 eva::gpdFit(ajuizamento$num_proc, threshold = 4.32)
@@ -261,6 +272,29 @@ eva::gpdFit(ajuizamento$num_proc, threshold = 4.32)
 # Simulando uma distribuição de pareto com os parâmetros definidos
 pareto <- rPARETO2o(n = 1280, mu = 4.32, sigma = 0.8345)
 plot(density(pareto), col = "red")
+
+# Simulando uma distribuição binomial negativo
+negbin <- rNBI(n = 1280, mu = 4.241, sigma = 0.4685)
+plot(density(negbin), col = "red")
+
+mu <- 4.241
+sigma <- 0.4685
+
+# http://www.gamlss.com/wp-content/uploads/2013/01/gamlss-manual.pdf
+# µ = média = (1-p)*r/p
+
+# Parâmetro de Forma ou concentração (θ)
+  # Número de fracassos
+  # Var(Y) = µ + σµ2 = μ+μ2/θ = (1-p)*r/p^2
+  # σµ2 = μ2/θ => σ = 1/θ => θ = 1/σ
+theta <- 1/sigma
+
+# Probabilidade de sucesso (p):
+(p <- sigma / mu)
+#Numero de Sucessos (r):
+(r <- (p * mu) / (1 - p))
+
+rm(pareto, negbin, mu, sigma, theta, p, r)
 
 # POR FAZER!!!
 # Teste Kolmogorov-Smirnov
@@ -280,18 +314,19 @@ EnvStats::gofTest(teste, distribution = "pareto", test = "ks")
 # http://soche.cl/chjs/volumes/09/01/Suarez-Espinosa_etal(2018).pdf
 
 # Matriz de Correlações
-rho_ajuizamento <- cor(ajuizamento[,c(-1, -2)])
+rho_ajuizamento <- cor(ajuizamento[,3:8])
+rho_ajuizamento
 rho_ajuizamento[1, ]
 
 # Teste de Correlação de Pearson
 cor.test(ajuizamento$num_proc, ajuizamento$salario)
 
 # Matriz de correlações e p-valores
-correlation::correlation(ajuizamento[,c(-1, -2)])
+correlation::correlation(ajuizamento[,3:8])
 
 # Será que a correlação muda ao selecionarmos apenas um ano?
 teste <- filter(ajuizamento, propositura == "2018")
-rho_teste <- cor(teste[, c(-1, -2)])
+rho_teste <- cor(teste[,3:8])
 rho_teste[1, ]
 
 # Será que a correlação muda ao excluirmos São Paulo?
@@ -384,8 +419,8 @@ if(k > 1){
 }
 
 # Relatório das CARGAS FATORIAIS e das COMUNALIDADES
-  # Se a comunalidade da variável "salario" para dois fatores é 0.76,
-  # Significa que apenas dois fatores capturaram 76% da variância dessa variável
+  # Se a comunalidade da variável "salario" para dois fatores é 0.63,
+  # Significa que apenas dois fatores capturaram 63% da variância dessa variável
 data.frame(cargas_fatoriais) |>
   rename(F1 = X1,
          F2 = X2) |>
@@ -413,9 +448,9 @@ data.frame(cargas_fatoriais) |>
                               "%)"))) +
   theme_bw()
 
-#'Note que F1 explica 87,78% do comportamento dos dados e possui alta correlação
+#'Note que F1 explica 83,81% do comportamento dos dados e possui alta correlação
   # com população, faixas etárias, ocupados, divórcios e número de filhos
-# Por sua vez, F2 explica 7,35% do comportamento dos dados e possui correlação
+# Por sua vez, F2 explica 9,59% do comportamento dos dados e possui correlação
 # próxima a ZERO com essas mesmas variáveis
 
 # ATENÇÃO, o R faz um ESPELHAMENTO horizontal e vertical para separar os fatores
@@ -514,8 +549,8 @@ if(k > 1){
 }
 
 # Relatório das CARGAS FATORIAIS e das COMUNALIDADES
-# Se a comunalidade da variável "salario" para dois fatores é 0.76,
-# Significa que apenas dois fatores capturaram 76% da variância dessa variável
+# Se a comunalidade da variável "salario" para dois fatores é 0.63,
+# Significa que apenas dois fatores capturaram 63% da variância dessa variável
 data.frame(cargas_fatoriais) |>
   rename(F1 = X1,
          F2 = X2) |>
@@ -543,9 +578,9 @@ data.frame(cargas_fatoriais) |>
                               "%)"))) +
   theme_bw()
 
-# Note que F1 explica 86,56% do comportamento dos dados e possui forte correlação
+# Note que F1 explica 86,14% do comportamento dos dados e possui forte correlação
 # com população, faixas etárias, ocupados, divórcios e número de filhos
-# Por sua vez, F2 explica 6,37% do comportamento dos dados e possui correlação
+# Por sua vez, F2 explica 8,45% do comportamento dos dados e possui correlação
 # próxima a ZERO com essas mesmas variáveis
 
 # Scores Fatoriais
@@ -584,7 +619,7 @@ ajuizamento_fat_exsp <- ajuizamento_exsp|>
 rm(afpc, cargas_fatoriais, dados_std, F1, F2, relatorio, scores_fatoriais, k)
 
 save(ajuizamento_fat, file="Documentos/ajuizamento_fat.RData")
-save(ajuizamento_fat_exsp, file="Documentos/ajuizamento_fat_ex_sp.RData")
+save(ajuizamento_fat_exsp, file="Documentos/ajuizamento_fat_exsp.RData")
 
 ################################################################################
 #                         Estimação por Regressão                              #
@@ -635,6 +670,19 @@ fitDist(y = ajuizamento$populacao, k = 2, type = "realplus", trace = FALSE, try.
 
 plot(density(ajuizamento$num_proc), main = "Kernel Density das Causas Sentenciadas")
 plot(density(ajuizamento$populacao), main = "Kernel Density da População")
+
+auxiliar <- ajuizamento[ , c("num_proc", "populacao")] |>
+  scale() |>
+  round(2) |>
+  as.data.frame()
+
+plot(density(auxiliar$num_proc), main = "Kernel Density das Causas Sentenciadas")
+plot(density(auxiliar$populacao), main = "Kernel Density da População")
+
+openxlsx::write.xlsx(auxiliar,
+           file = "E:/Andre/DataScience/Projeto MP/Documentos/KDE.xlsx",
+           overwrite = TRUE)
+rm(auxiliar)
 
 # O que acontece se transformarmos a variável explicativa?
 lambda <- powerTransform(ajuizamento_bc$populacao)$lambda
@@ -708,10 +756,10 @@ rm(lambda, rs_populacao_bc_exsp)
 
 rlm <- lm(num_proc ~ populacao + salario + idh + pib_pc + ocupados, ajuizamento)
 
-#procedimento "stepwise" - Salario saiu
+#procedimento "stepwise"
 rlm <- step(rlm, k = 3.841459)
 
-# R2 = 0.9815
+# R2 = 0.9794
 # Estatística F de Snedecor p-valor < 2.2e-16
 summary(rlm)
 
@@ -721,7 +769,29 @@ qual_modelo <- qualidade(rlm)
 # Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
 sf.test(rlm$residuals)
 
+# Teste de Breusch-Pagan para diagnóstico de heterocedasticidade
+  # H0 : ausência de heterocedasticidade.
+  # H1: heterocedasticidade, ou seja, correlação entre resíduos e uma ou mais
+  # variáveis explicativas, o que indica omissão de variável relevante!
+  #"Prob > Chi2"  é o p-value
+ols_test_breusch_pagan(rlm)
 
+auxiliar <- data.frame(fitted = rlm$fitted.values, residual = rlm$residuals)
+
+# Relação resíduos e fitted values do modelo:
+auxiliar |>
+  ggplot() +
+  geom_point(aes(x = fitted, y = residual),
+             color = "#55C667FF", size = 3) +
+  labs(x = "Fitted Values do Modelo",
+       y = "Resíduos do Modelo") +
+  theme_bw()
+
+#Teste de Multicolinearidade (Variance Inflation Factor e Tolerance)
+  # A Tolerância varia de 0 a 1 e queremos que seja próxima de 1
+  # VIF (Variance Inflation Factor) = 1/tolerância
+  # VIF varia de 1 a + infinito
+ols_vif_tol(rlm)
 
 
 #4 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados ----------- 
@@ -744,6 +814,11 @@ qual_modelo <- qualidade(rlm_exsp)
 # Teste de Shapiro-Francia (Aderência dos resíduos à normalidade)
 sf.test(rlm_exsp$residuals)
 
+# Diagnóstico de Heterocedasticidade
+ols_test_breusch_pagan(rlm_exsp)
+
+# Diagnóstico de Multicoliniariadade
+ols_vif_tol(rlm_exsp)
 
 #5 - Regressão Linear - Score Fatorial -----------------------------------------
 
@@ -882,6 +957,11 @@ qual_modelo <- qualidade(rm_poisson_fat_exsp)
 rs_bneg <- glm.nb(formula = num_proc ~  populacao,
                   data = ajuizamento)
 
+glm.control()
+# Não convergiu - aumentando o nº de iterações
+rs_bneg <- glm.nb(formula = num_proc ~  populacao,
+                  data = ajuizamento, control = list(maxit = 100, epsilon = 1e-08, trace = F))
+
 # Parâmetros do modelo_poisson
 summary(rs_bneg)
 
@@ -916,6 +996,10 @@ qual_modelo <- qualidade(rs_bneg_exsp)
 
 rm_bneg <- glm.nb(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
                   data = ajuizamento)
+
+# Não convergiu - aumentando o nº de iterações
+rm_bneg <- glm.nb(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
+                  data = ajuizamento, control = list(maxit = 100, epsilon = 1e-08, trace = F))
 
 #procedimento "stepwise" - Excluiu PIB_pc
 rm_bneg <- step(rm_bneg, k = 3.841459)
@@ -996,6 +1080,7 @@ summary(zero_poisson)
 # Teste de Vuong
 vuong(m1 = rm_poisson, m2 = zero_poisson)
 
+
 # Indicadores de Qualidade do Modelo
 qual_modelo <- qualidade(zero_poisson)
 
@@ -1003,7 +1088,7 @@ qual_modelo <- qualidade(zero_poisson)
 #20 - Modelo Zero-Inflated Binomial Negativo (ZINB) ----------------------------
 zero_bneg <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
                            | populacao, #pipe
-                           data = ajuizamento_exsp,
+                           data = ajuizamento,
                            dist = "negbin")
 
 summary(zero_bneg)
@@ -1033,7 +1118,7 @@ summary(zero_poisson_exsp)
 vuong(m1 = rm_poisson_exsp, m2 = zero_poisson_exsp)
 
 # Indicadores de Qualidade do Modelo
-qual_modelo <- qualidade(zero_poisson_exp)
+qual_modelo <- qualidade(zero_poisson_exsp)
 
 #22 - Modelo Zero-Inflated Binomial Negativo (ZINB) ----------------------------
   # Sem São Paulo
@@ -1051,174 +1136,255 @@ vuong(m1 = rm_bneg_exsp, m2 = zero_bneg_exsp)
 qual_modelo <- qualidade(zero_bneg_exsp)
 
 
-#23 - Modelo Pareto Tipo II - Número de Processos X População
+#23 - Modelo Pareto Generalizado - Número de Processos X População -------------
 
-teste <- VGAM::vglm(num_proc ~ populacao,
-                    family = VGAM::gpd(threshold = 0),
-                    data = ajuizamento, trace = TRUE)
+rs_pareto <- vglm(num_proc ~ populacao,
+                    family = VGAM::gpd(threshold = -0.1),
+                    data = ajuizamento)
+
+
+summary(rs_pareto)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_pareto)
+
+
+#24 - Modelo Pareto Generalizado - Número de Processos X População -------------
+  # Sem São Paulo
+
+rs_pareto_exsp <- vglm(num_proc ~ populacao,
+                    family = VGAM::gpd(threshold = -0.1),
+                    data = ajuizamento_exsp)
+
+summary(rs_pareto_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_pareto_exsp)
+
+
+#25 - Modelo Pareto Generalizado - Processos X População, IDH, PIB_pc e ocupados
+
+rm_pareto <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados,
+                  family = VGAM::gpd(threshold = -0.1),
+                  data = ajuizamento)
+summary(rm_pareto)
+
+#procedimento "stepwise"
+
+rm_pareto <- vglm(num_proc ~  populacao + salario + idh + pib_pc,
+                  family = VGAM::gpd(threshold = -0.1),
+                  data = ajuizamento)
+
+summary(rm_pareto)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_pareto)
+
+
+#26 - Modelo Pareto Generalizado - Processos X População, IDH, PIB_pc e ocupados
+  # Sem São Paulo
+
+rm_pareto_exsp <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados,
+                       family = VGAM::gpd(threshold = -0.1),
+                       data = ajuizamento_exsp)
+summary(rm_pareto_exsp)
+
+# Procedimento Stepwise
+rm_pareto_exsp <- vglm(num_proc ~  populacao + salario + idh + pib_pc,
+                       family = VGAM::gpd(threshold = -0.1),
+                       data = ajuizamento_exsp)
+summary(rm_pareto_exsp)
+
+rm_pareto_exsp <- vglm(num_proc ~  populacao + idh + pib_pc,
+                       family = VGAM::gpd(threshold = -0.1),
+                       data = ajuizamento_exsp)
+summary(rm_pareto_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_pareto_exsp)
+
+
+# 27 - Modelo Binomial Negativo - Número de Processos X População Transformada--
+
+lambda <- powerTransform(ajuizamento$populacao)$lambda
+
+temp <- ajuizamento |>
+  mutate(populacao =  boxcoxTransform(ajuizamento$populacao, lambda = lambda))
+
+rs_bneg_box <- glm.nb(num_proc ~ populacao,
+               data = temp)
+
+summary(rs_bneg_box)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_bneg_box)
+
+
+# 28 - Modelo Binomial Negativo - Número de Processos X População Transformada--
+  # Sem São Paulo
+
+lambda_exsp <- powerTransform(ajuizamento_exsp$populacao)$lambda
+
+temp_exsp <- ajuizamento_exsp |>
+  mutate(populacao =  boxcoxTransform(ajuizamento_exsp$populacao, lambda = lambda_exsp))
+
+rs_bneg_box_exsp <- glm.nb(num_proc ~ populacao,
+                   data = temp_exsp)
+
+summary(rs_bneg_box_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_bneg_box_exsp)
+
+
+# 29 - Modelo Binomial Negativo - População Transformada------------------------
+rm_bneg_box <- glm.nb(num_proc ~ populacao + salario + idh + pib_pc + ocupados,
+                      data = temp)
+
+#procedimento "stepwise"
+rm_bneg_box <- step(rm_bneg_box, k = 3.841459)
+
+summary(rm_bneg_box)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_bneg_box)
+
+# 30 - Modelo Binomial Negativo - População Transformada------------------------
+  # Sem São Paulo
+
+rm_bneg_box_exsp <- glm.nb(num_proc ~ populacao + salario + idh + pib_pc + ocupados,
+                           data = temp_exsp)
+
+# procedimento "stepwise"
+rm_bneg_box_exsp <- step(rm_bneg_box_exsp, k = 3.841459)
+
+summary(rm_bneg_box_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_bneg_box_exsp)
+
+
+#31 - Modelo ZINB - Número de Processos X População Transformada----------------
+rs_zero_bneg_box <- zeroinfl(formula = num_proc ~  populacao
+                             | populacao, #pipe
+                             data = temp,
+                             dist = "negbin")
+
+# Teste de Vuong
+vuong(m1 = rs_bneg_box, m2 = rs_zero_bneg_box)
+
+summary(rs_zero_bneg_box) # Não excluiu salário
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_zero_bneg_box)
+
+
+#32 - Modelo ZINB - Número de Processos X População Transformada----------------
+  # Sem São Paulo
+rs_zero_bneg_box_exsp <- zeroinfl(formula = num_proc ~  populacao
+                                  | populacao, #pipe
+                                  data = temp_exsp,
+                                  dist = "negbin")
+
+# Teste de Vuong
+vuong(m1 = rs_bneg_box_exsp, m2 = rs_zero_bneg_box_exsp)
+
+summary(rs_zero_bneg_box_exsp) # Não excluiu salário
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_zero_bneg_box_exsp)
+
+
+#33 - Modelo ZINB - População Transformada--------------------------------------
+rm_zero_bneg_box <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
+                      | populacao, #pipe
+                      data = temp,
+                      dist = "negbin")
+
+# Teste de Vuong
+vuong(m1 = rm_bneg_box, m2 = rm_zero_bneg_box)
+
+#procedimento "stepwise"
+rm_zero_bneg_box <- step(rm_zero_bneg_box, k = 3.841459)
+
+summary(rm_zero_bneg_box) # Não excluiu salário
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_zero_bneg_box)
+
+
+#34 - Modelo ZINB - População Transformada--------------------------------------
+  # Sem São Paulo
+rm_zero_bneg_box_exsp <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
+                         | populacao, #pipe
+                         data = temp_exsp,
+                         dist = "negbin")
+
+# Teste de Vuong
+vuong(m1 = rm_bneg_box_exsp, m2 = rm_zero_bneg_box_exsp)
+
+#procedimento "stepwise"
+rm_zero_bneg_box_exsp <- step(rm_zero_bneg_box_exsp, k = 3.841459)
+
+summary(rm_zero_bneg_box_exsp) # Não excluiu salário
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_zero_bneg_box_exsp)
+
+#35 - Modelo Pareto Generalizado - Número de Processos X População Transformada-
+
+rs_pareto_box <- vglm(num_proc ~  populacao, 
+                      family = VGAM::gpd(threshold = -0.1),
+                      data = temp)
+
+summary(rs_pareto_box)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_pareto_box)
+
+
+#36 - Modelo Pareto Generalizado - Número de Processos X População Transformada-
+# Sem São Paulo
+
+rs_pareto_box_exsp <- vglm(num_proc ~  populacao, 
+                           #+ salario + idh + pib_pc + ocupados,
+                           family = VGAM::gpd(threshold = -0.1),
+                           data = temp_exsp)
+
+summary(rs_pareto_box_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rs_pareto_box_exsp)
+
+
+#37 - Modelo Pareto Generalizado - População Transformada-----------------------
+
+rm_pareto_box <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados, 
+                       family = VGAM::gpd(threshold = -0.1),
+                       data = temp)
+
+summary(rm_pareto_box)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_pareto_box)
+
+
+#38 - Modelo Pareto Generalizado - População Transformada-----------------------
+  # Sem São Paulo
+
+rm_pareto_box_exsp <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados, 
+                      #+ salario + idh + pib_pc + ocupados,
+                      family = VGAM::gpd(threshold = -0.1),
+                      data = temp_exsp)
+
+summary(rm_pareto_box_exsp)
+
+# Indicadores de Qualidade do Modelo
+qual_modelo <- qualidade(rm_pareto_box_exsp)
+
+# Aferindo o modelo com o melhor "fit"
+(qual_modelo <- qual_modelo |>
+  arrange(desc(ll), desc(AIC)))
+
 
 save(qual_modelo, file="Documentos/qualidade_modelo.RData")
-################################################################################
-#                           Comparando Modelos                                 #
-################################################################################
-
-
-#Comparando os modelos Poisson e Binomial Negativo
-export_summs(modelo_poisson, modelo_bneg, scale = F, digits = 4,
-             model.names = c("POISSON","BNEG"))
-
-data.frame(LL_Poisson = round(logLik(modelo_poisson), 1),
-           LL_Bneg = round(logLik(modelo_bneg), 1)) %>%
-  kable() %>%
-  kable_styling(bootstrap_options = "striped", position = "center", 
-                full_width = F, 
-                font_size = 30)
-
-#Likelihoo-ratio test
-lrtest(modelo_poisson, modelo_bneg)
-
-#Gráfico para a comparação dos LL dos modelos Poisson e Binomial Negativo
-my_plot <-
-  data.frame(Poisson = logLik(modelo_poisson),
-             BNeg = logLik(modelo_bneg)) %>% 
-  melt() %>% 
-  ggplot(aes(x = variable, y = value)) +
-  geom_bar(aes(fill = factor(variable)), 
-           stat = "identity",
-           color = "black") +
-  geom_text(aes(label = round(value, digits = 3)), 
-            color = "black", 
-            size = 4, 
-            vjust = -0.5,
-            angle = 90) +
-  scale_fill_manual("Legenda:", values = c("#440154FF", "orange")) +
-  coord_flip() +
-  labs(x = "Estimação",
-       y = "Log-Likelihood") +
-  theme_cowplot()
-my_plot
-
-#Com JPEG
-ggdraw() +
-  draw_image("https://cdn.pixabay.com/photo/2016/08/21/18/48/emoticon-1610518_960_720.png",
-             x = -0.12, y = 0.23, scale = .43) +
-  draw_plot(my_plot)
-
-
-#COMPARAÇÕES ENTRE AS PREVISÕES:
-#Qual seria a quantidade média esperada de violações de trânsito para um país
-#cujo corpo diplomático seja composto por 23 membros, considerando o período
-#anterior à vigência da lei e cujo índice de corrupção seja igual 0.5?
-
-#Modelo Poisson:
-predict(object = modelo_poisson, #linha 144 deste script
-        newdata = data.frame(staff = 23,
-                             post = "no",
-                             corruption = 0.5),
-        type = "response")
-
-#type = "response" já retorna o valor de lambda após a exponenciação de "y"
-
-#Modelo Binomial Negativo:
-predict(object = modelo_bneg,
-        newdata = data.frame(staff = 23,
-                             post = "no",
-                             corruption = 0.5),
-        type = "response")
-
-#type = "response" já dá o valor da variável dependente.
-# vai calcular o vertor e clacular sua exponencial
-
-
-#Qual seria a quantidade média esperada de violações de trânsito para o mesmo
-#país, porém agora considerando a vigência da lei?
-
-#Modelo Poisson:
-predict(object = modelo_poisson,
-        newdata = data.frame(staff = 23,
-                             post = "yes",
-                             corruption = 0.5),
-        type = "response")
-
-#Modelo Binomial Negativo:
-predict(object = modelo_bneg,
-        newdata = data.frame(staff = 23,
-                             post = "yes",
-                             corruption = 0.5),
-        type = "response")
-
-
-#Adicionando os fitted values dos modelos estimados até o momento, para fins de 
-#comparação:
-corruption %>%
-  mutate(fitted_poisson = modelo_poisson$fitted.values,
-         fitted_bneg = modelo_bneg$fitted.values) %>% 
-  dplyr::select(country, code, violations, fitted_poisson, 
-                fitted_bneg) %>% 
-  kable() %>%
-  kable_styling(bootstrap_options = "striped", 
-                full_width = F, 
-                font_size = 19)
-
-
-#Fitted values dos modelos POISSON e BINOMIAL NEGATIVO, considerando,
-#para fins didáticos, apenas a variável preditora 'staff':
-corruption %>%
-  ggplot() +
-  geom_point(aes(x = staff, y = violations), alpha = 0.5, size = 2) +
-  geom_smooth(aes(x = staff, y = modelo_poisson$fitted.values,
-                  color = "POISSON"), se = F, size = 1.5) +
-  geom_smooth(aes(x = staff, y = modelo_bneg$fitted.values,
-                  color = "BNEG"), se = F, size = 1.5) + 
-  scale_color_manual("Estimação:",
-                     values = c("orange", "#440154FF")) +
-  labs(x = "Number of Diplomats (staff)",
-       y = "Unpaid Parking Violations (violations)") +
-  theme(panel.background = element_rect("white"),
-        panel.grid = element_line("grey95"),
-        panel.border = element_rect(NA),
-        legend.position = "bottom")
-
-
-#Note que a variável dependente está na ordenada
-#Note que que, para valores pequenos da variável explicativa, existe pouca diferença
-#entre as duas dispersões.
-#Contudo, a Poisson não captura a cauda longa.
-
-##################################################################################
-#                        DIAGNÓSTICO DE HETEROCEDASTICIDADE                      #
-##################################################################################
-
-# Teste de Breusch-Pagan para diagnóstico de heterocedasticidade
-ols_test_breusch_pagan(ajuizamento_step)
-
-#H0 do teste: ausência de heterocedasticidade.
-#H1 do teste: heterocedasticidade, ou seja, correlação entre resíduos e uma ou mais
-#variáveis explicativas, o que indica omissão de variável relevante!
-
-#"Prob > Chi2"  é o p-value
-
-# Adicionando fitted values e resíduos do modelo 'step wise' na tabela "ajuizamentos"
-ajuizamento$fitted_step <- ajuizamento_step$fitted.values
-ajuizamento$residuos_step <- ajuizamento_step$residuals
-
-#Gráfico que relaciona resíduos e fitted values do modelo 'step_planosaude'
-ajuizamento |>
-  ggplot() +
-  geom_point(aes(x = fitted_step, y = residuos_step),
-             color = "#55C667FF", size = 3) +
-  labs(x = "Fitted Values do Modelo Stepwise",
-       y = "Resíduos do Modelo Stepwise") +
-  theme_bw()
-
-class(ajuizamento_step)
-
-#Teste de Multicolinearidade (Variance Inflation Factor e Tolerance)
-ols_vif_tol(ajuizamento_step)
-
-#A Tolerância varia de 0 a 1 e queremos que seja próxima de 1
-
-#VIF (Variance Inflation Factor) = 1/tolerância
-#VIF varia de 1 a + infinito
-
-
