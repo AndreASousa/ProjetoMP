@@ -198,3 +198,5 @@ rm(distribuicao_df_nd, multiplos_recursos)
 
 save(distribuicao_df, file="Documentos/Distribuicao_df.RData")
 
+##################################### FIM ######################################
+

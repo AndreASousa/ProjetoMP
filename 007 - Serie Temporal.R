@@ -7,7 +7,8 @@ pacotes <- c("here",
              "lubridate",
              "forecast",
              "prophet",#Utilizado para separar dados por mês e ano
-             "openxlsx" # manipula arquivos ".xlsx"
+             "openxlsx", # manipula arquivos ".xlsx"
+             "zoo" # Retorna as datas para o formato de data frame
              )
              
 if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
@@ -51,11 +52,11 @@ ggtsdisplay(serie_mensal)
 #3 - Verificando se a série segue a distribuiçao normal
 hist(serie_mensal)
 
-qqnorm(serie_mensal)
-qqline(serie_mensal, col = "red")
 # É possível notar que a distribuição se acentua no centro
 # Podemos trabalhar com uma tendência a partir do ponto zero.
 # A partir dos ponto 1 e -1, existe uma disfunção entre a distribuição normal e os dados.
+qqnorm(serie_mensal)
+qqline(serie_mensal, col = "red")
 
 
 #4 - Transformação por Logaritmo natual
@@ -347,5 +348,44 @@ checkresiduals(modelo)
 previsao <- forecast(modelo, h = 12)
 autoplot(previsao)
 
-args(autoplot)
 
+#6 - Exportando os dados para o Excel
+
+# Série temporal com valores observados
+observado <-  data.frame(observado = as.matrix(previsao$x), 
+                        data = as.Date(as.yearmon(time(previsao$x))))
+
+# Fitted Values
+fitted <-  data.frame(fitted = as.matrix(previsao$fitted),
+                     data = as.Date(as.yearmon(time(previsao$fitted))))
+
+# Previsão 12 meses - ponto médio
+projecao <-  data.frame(fitted = as.matrix(previsao$mean),
+                       data = as.Date(as.yearmon(time(previsao$mean))))
+
+# Unindo os valores previstos e os projetados
+projecao <- rbind(fitted, projecao)
+rm(fitted)
+projecao
+
+# Previsão 12 meses - ponto mínimo a 95% de IC
+inferior <-  data.frame(inferior = as.matrix(previsao$lower[, 2]),
+                       data = as.Date(as.yearmon(time(previsao$lower))))
+
+# Previsão 12 meses - ponto médio a 95%  de IC
+superior <-  data.frame(superior = as.matrix(previsao$upper[, 2]),
+                       data = as.Date(as.yearmon(time(previsao$upper))))
+
+# Criando uma coluna com todos os meses
+exportar <- data.frame(data = seq(as.Date("2017-08-01"), as.Date("2023-07-01"), by="months"))
+
+# Criando a tabela única
+exportar <- exportar |>
+  left_join(observado, by = "data") |>
+  left_join(projecao, by = "data") |>
+  left_join(inferior, by = "data") |>
+  left_join(superior, by = "data")
+
+write.xlsx(exportar, file = "E:/Andre/DataScience/Projeto MP/Documentos/SARIMA.xlsx", overwrite = TRUE)
+
+##################################### FIM ######################################

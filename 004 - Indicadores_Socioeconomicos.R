@@ -371,3 +371,5 @@ save(indicadores, file="Documentos/indicadores.RData")
 
 summary(indicadores)
 
+##################################### FIM ######################################
+

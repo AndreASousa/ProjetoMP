@@ -1,9 +1,9 @@
-load(here("Documentos", "ajuizamento.RData"))
-load(here("Documentos", "ajuizamento_exsp.RData"))
-load(here("Documentos", "ajuizamento_bc.RData"))
-load(here("Documentos", "ajuizamento_bc_exsp.RData"))
-load(here("Documentos", "ajuizamento_fat.RData"))
-load(here("Documentos", "ajuizamento_fat_exsp.RData"))
+# load(here("Documentos", "ajuizamento.RData"))
+# load(here("Documentos", "ajuizamento_exsp.RData"))
+# load(here("Documentos", "ajuizamento_bc.RData"))
+# load(here("Documentos", "ajuizamento_bc_exsp.RData"))
+# load(here("Documentos", "ajuizamento_fat.RData"))
+# load(here("Documentos", "ajuizamento_fat_exsp.RData"))
 
 
 ################################################################################
@@ -12,7 +12,7 @@ load(here("Documentos", "ajuizamento_fat_exsp.RData"))
 
 pacotes <- c("here",
              "tidyverse", # pacote para manipulacao de dados
-             "plotly", #plotly
+             "plotly", 
              "nortest", # Teste de distribuição de variáveis
              "olsrr", # Diagnóstico de multicolinearidade e heterocelasticidade
              
@@ -32,7 +32,7 @@ pacotes <- c("here",
              "factoextra", # extração e vizualização os eigenvalues
              "ggrepel",
              "car", # PowerTransform (transformar boxcox em modelos não lineares)
-             "MASS", #Para rodar modelos do tipo binomial negativo
+             "MASS", # Para rodar modelos do tipo binomial negativo
              "pscl", # Modelos "Zero-Inflated" e Teste de Vuong
              "VGAM", # Modelo de Regressão para distribuição de Pareto
              "openxlsx" # manipula arquivos ".xlsx"
@@ -78,7 +78,6 @@ qualidade <- function(glm = NULL, df = qual_modelo){
     rse <- NA
   }
 
-  # linha <- cbind(Modelo, df, ll, AIC)
   linha <- data.frame("Modelo" = modelo, "df" = graus, "ll" = veross, "AIC" = akaike, "RSE" = rse)
 
   df <- df |>
@@ -668,7 +667,9 @@ sf.test(rs_populacao_bc$residuals)
 shapiro.test(ajuizamento$populacao)
 fitDist(y = ajuizamento$populacao, k = 2, type = "realplus", trace = FALSE, try.gamlss = TRUE)
 
-plot(density(ajuizamento$num_proc), main = "Kernel Density das Causas Sentenciadas")
+plot(density(ajuizamento$num_proc), col = 'red',
+     main = "Kernel Density das Causas Sentenciadas")
+
 plot(density(ajuizamento$populacao), main = "Kernel Density da População")
 
 auxiliar <- ajuizamento[ , c("num_proc", "populacao")] |>
@@ -676,8 +677,13 @@ auxiliar <- ajuizamento[ , c("num_proc", "populacao")] |>
   round(2) |>
   as.data.frame()
 
-plot(density(auxiliar$num_proc), main = "Kernel Density das Causas Sentenciadas")
-plot(density(auxiliar$populacao), main = "Kernel Density da População")
+plot(density(auxiliar$num_proc), 
+     col = "red",
+     main = "Kernel Density Causas Sentenciadas e População") +
+  lines(density(auxiliar$populacao), col = "black") +
+  legend("bottomright", c("Número de Processos", "População"),
+         col = c("red","black"),
+         lty = c(1,1), lwd = c(1,1))
 
 openxlsx::write.xlsx(auxiliar,
            file = "E:/Andre/DataScience/Projeto MP/Documentos/KDE.xlsx",
@@ -801,7 +807,7 @@ ols_vif_tol(rlm)
 rlm_exsp <- lm(num_proc ~ populacao + salario + idh + pib_pc + ocupados,
                        ajuizamento_exsp)
 
-#procedimento "stepwise" - Todas variáveis mantidas
+# Procedimento "stepwise" - Todas variáveis mantidas
 rlm_exsp <- step(rlm_exsp, k = 3.841459)
 
 # R2 = 0.8185
@@ -845,7 +851,7 @@ sf.test(rlm_fat$residuals)
 rlm_fat_exsp <- lm(num_proc ~ f1 + f2,
                        ajuizamento_fat_exsp)
 
-#procedimento "stepwise" - Score Fatorial 2 Excluído
+# procedimento "stepwise" - Score Fatorial 2 Excluído
 rlm_fat_exsp <- step(rlm_fat_exsp, k = 3.841459)
 
 # R2 = 0.7971
@@ -865,7 +871,7 @@ rs_poisson <- glm(formula = num_proc ~  populacao,
                       data = ajuizamento,
                       family = "poisson")
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rs_poisson)
 
 # Indicadores de Qualidade do Modelo
@@ -879,7 +885,7 @@ rs_poisson_exsp <- glm(formula = num_proc ~  populacao,
                   data = ajuizamento_exsp,
                   family = "poisson")
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rs_poisson_exsp)
 
 # Indicadores de Qualidade do Modelo
@@ -892,10 +898,10 @@ rm_poisson <- glm(formula = num_proc ~  populacao + salario + idh + pib_pc + ocu
                   data = ajuizamento,
                   family = "poisson")
 
-#procedimento "stepwise" # todos mantidos
+# procedimento "stepwise" # todos mantidos
 rm_poisson <- step(rm_poisson, k = 3.841459)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rm_poisson)
 
 # Indicadores de Qualidade do Modelo
@@ -909,10 +915,10 @@ rm_poisson_exsp <- glm(formula = num_proc ~  populacao + salario + idh + pib_pc 
                        data = ajuizamento_exsp,
                        family = "poisson")
 
-#procedimento "stepwise" - todos mantidos
+# procedimento "stepwise" - todos mantidos
 rm_poisson_exsp <- step(rm_poisson_exsp, k = 3.841459)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rm_poisson_exsp)
 
 # Indicadores de Qualidade do Modelo
@@ -925,10 +931,10 @@ rm_poisson_fat <- glm(formula = num_proc ~  f1 + f2,
                   data = ajuizamento_fat,
                   family = "poisson")
 
-#procedimento "stepwise" # todos mantidos
+# procedimento "stepwise" # todos mantidos
 rm_poisson_fat <- step(rm_poisson_fat, k = 3.841459)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rm_poisson_fat)
 
 # Indicadores de Qualidade do Modelo
@@ -945,7 +951,7 @@ rm_poisson_fat_exsp <- glm(formula = num_proc ~ f1 + f2,
 #procedimento "stepwise" - todos mantidos
 rm_poisson_fat_exsp <- step(rm_poisson_fat_exsp, k = 3.841459)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rm_poisson_fat_exsp)
 
 # Indicadores de Qualidade do Modelo
@@ -962,7 +968,7 @@ glm.control()
 rs_bneg <- glm.nb(formula = num_proc ~  populacao,
                   data = ajuizamento, control = list(maxit = 100, epsilon = 1e-08, trace = F))
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rs_bneg)
 
 # Estatística z de Wald - para verificação da significância estatística
@@ -982,7 +988,7 @@ qual_modelo <- qualidade(rs_bneg)
 rs_bneg_exsp <- glm.nb(formula = num_proc ~  populacao,
                        data = ajuizamento_exsp)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rs_bneg_exsp)
 
 # Estatística z de Wald
@@ -1004,7 +1010,7 @@ rm_bneg <- glm.nb(formula = num_proc ~  populacao + salario + idh + pib_pc + ocu
 #procedimento "stepwise" - Excluiu PIB_pc
 rm_bneg <- step(rm_bneg, k = 3.841459)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rm_bneg)
 
 # Estatística z de Wald 
@@ -1023,7 +1029,7 @@ rm_bneg_exsp <- glm.nb(formula = num_proc ~  populacao + salario + idh + pib_pc 
 #procedimento "stepwise" - Saiu PIB_pc e salario
 rm_bneg_exsp <- step(rm_bneg_exsp, k = 3.841459)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rm_bneg_exsp)
 
 # Estatística z de Wald 
@@ -1041,7 +1047,7 @@ rm_bneg_fat <- glm.nb(formula = num_proc ~  f1 + f2,
 #procedimento "stepwise" # todos mantidos
 rm_bneg_fat <- step(rm_bneg_fat, k = 3.841459)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rm_bneg_fat)
 
 # Indicadores de Qualidade do Modelo
@@ -1057,7 +1063,7 @@ rm_bneg_fat_exsp <- glm.nb(formula = num_proc ~ f1 + f2,
 #procedimento "stepwise" - todos mantidos
 rm_bneg_fat_exsp <- step(rm_bneg_fat_exsp, k = 3.841459)
 
-# Parâmetros do modelo_poisson
+# Parâmetros do modelo
 summary(rm_bneg_fat_exsp)
 
 # Indicadores de Qualidade do Modelo
@@ -1090,7 +1096,6 @@ zero_bneg <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc +
                            | populacao, #pipe
                            data = ajuizamento,
                            dist = "negbin")
-
 summary(zero_bneg)
 
 # Teste de Vuong
@@ -1208,11 +1213,11 @@ qual_modelo <- qualidade(rm_pareto_exsp)
 
 lambda <- powerTransform(ajuizamento$populacao)$lambda
 
-temp <- ajuizamento |>
+pop_lambda <- ajuizamento |>
   mutate(populacao =  boxcoxTransform(ajuizamento$populacao, lambda = lambda))
 
 rs_bneg_box <- glm.nb(num_proc ~ populacao,
-               data = temp)
+               data = pop_lambda)
 
 summary(rs_bneg_box)
 
@@ -1225,11 +1230,11 @@ qual_modelo <- qualidade(rs_bneg_box)
 
 lambda_exsp <- powerTransform(ajuizamento_exsp$populacao)$lambda
 
-temp_exsp <- ajuizamento_exsp |>
+pop_lambda_exsp <- ajuizamento_exsp |>
   mutate(populacao =  boxcoxTransform(ajuizamento_exsp$populacao, lambda = lambda_exsp))
 
 rs_bneg_box_exsp <- glm.nb(num_proc ~ populacao,
-                   data = temp_exsp)
+                   data = pop_lambda_exsp)
 
 summary(rs_bneg_box_exsp)
 
@@ -1239,7 +1244,7 @@ qual_modelo <- qualidade(rs_bneg_box_exsp)
 
 # 29 - Modelo Binomial Negativo - População Transformada------------------------
 rm_bneg_box <- glm.nb(num_proc ~ populacao + salario + idh + pib_pc + ocupados,
-                      data = temp)
+                      data = pop_lambda)
 
 #procedimento "stepwise"
 rm_bneg_box <- step(rm_bneg_box, k = 3.841459)
@@ -1253,7 +1258,7 @@ qual_modelo <- qualidade(rm_bneg_box)
   # Sem São Paulo
 
 rm_bneg_box_exsp <- glm.nb(num_proc ~ populacao + salario + idh + pib_pc + ocupados,
-                           data = temp_exsp)
+                           data = pop_lambda_exsp)
 
 # procedimento "stepwise"
 rm_bneg_box_exsp <- step(rm_bneg_box_exsp, k = 3.841459)
@@ -1267,7 +1272,7 @@ qual_modelo <- qualidade(rm_bneg_box_exsp)
 #31 - Modelo ZINB - Número de Processos X População Transformada----------------
 rs_zero_bneg_box <- zeroinfl(formula = num_proc ~  populacao
                              | populacao, #pipe
-                             data = temp,
+                             data = pop_lambda,
                              dist = "negbin")
 
 # Teste de Vuong
@@ -1283,7 +1288,7 @@ qual_modelo <- qualidade(rs_zero_bneg_box)
   # Sem São Paulo
 rs_zero_bneg_box_exsp <- zeroinfl(formula = num_proc ~  populacao
                                   | populacao, #pipe
-                                  data = temp_exsp,
+                                  data = pop_lambda_exsp,
                                   dist = "negbin")
 
 # Teste de Vuong
@@ -1298,7 +1303,7 @@ qual_modelo <- qualidade(rs_zero_bneg_box_exsp)
 #33 - Modelo ZINB - População Transformada--------------------------------------
 rm_zero_bneg_box <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
                       | populacao, #pipe
-                      data = temp,
+                      data = pop_lambda,
                       dist = "negbin")
 
 # Teste de Vuong
@@ -1317,7 +1322,7 @@ qual_modelo <- qualidade(rm_zero_bneg_box)
   # Sem São Paulo
 rm_zero_bneg_box_exsp <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
                          | populacao, #pipe
-                         data = temp_exsp,
+                         data = pop_lambda_exsp,
                          dist = "negbin")
 
 # Teste de Vuong
@@ -1335,7 +1340,7 @@ qual_modelo <- qualidade(rm_zero_bneg_box_exsp)
 
 rs_pareto_box <- vglm(num_proc ~  populacao, 
                       family = VGAM::gpd(threshold = -0.1),
-                      data = temp)
+                      data = pop_lambda)
 
 summary(rs_pareto_box)
 
@@ -1349,7 +1354,7 @@ qual_modelo <- qualidade(rs_pareto_box)
 rs_pareto_box_exsp <- vglm(num_proc ~  populacao, 
                            #+ salario + idh + pib_pc + ocupados,
                            family = VGAM::gpd(threshold = -0.1),
-                           data = temp_exsp)
+                           data = pop_lambda_exsp)
 
 summary(rs_pareto_box_exsp)
 
@@ -1361,7 +1366,7 @@ qual_modelo <- qualidade(rs_pareto_box_exsp)
 
 rm_pareto_box <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados, 
                        family = VGAM::gpd(threshold = -0.1),
-                       data = temp)
+                       data = pop_lambda)
 
 summary(rm_pareto_box)
 
@@ -1375,7 +1380,7 @@ qual_modelo <- qualidade(rm_pareto_box)
 rm_pareto_box_exsp <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados, 
                       #+ salario + idh + pib_pc + ocupados,
                       family = VGAM::gpd(threshold = -0.1),
-                      data = temp_exsp)
+                      data = pop_lambda_exsp)
 
 summary(rm_pareto_box_exsp)
 
@@ -1388,3 +1393,5 @@ qual_modelo <- qualidade(rm_pareto_box_exsp)
 
 
 save(qual_modelo, file="Documentos/qualidade_modelo.RData")
+
+##################################### FIM ######################################

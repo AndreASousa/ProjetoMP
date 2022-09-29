@@ -458,4 +458,4 @@ sf.test(saude_step$residuals)
 
 chart.Correlation(alimento)
 
-
+##################################### FIM ######################################
