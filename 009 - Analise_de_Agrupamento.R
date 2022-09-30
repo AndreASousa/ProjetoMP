@@ -26,7 +26,8 @@ pacotes <- c("here",
              "pscl", # Modelos "Zero-Inflated" e Teste de Vuong
              "VGAM", # Modelo de Regressão para distribuição de Pareto
              "car", # PowerTransform (transformar boxcox em modelos não lineares)
-             "EnvStats" # boxcoxTransform()
+             "EnvStats", # boxcoxTransform()
+             "lmtest" # Teste da Razão de Verosimilhança
 )
 
 if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
@@ -45,6 +46,7 @@ rm(pacotes)
 #                                  FUNÇÕES                                     #
 ################################################################################
 
+# Armazena indicadores de qualidade dos modelos estimados
 qualidade <- function(glm = NULL, df = qual_modelo){
   
   #Captura o nome do modelo
@@ -921,9 +923,6 @@ rm_bneg_box <- step(rm_bneg_box, k = 3.841459)
 
 summary(rm_bneg_box)
 
-anova.lm(rm_bneg_box, rm_bneg_box_dummie)
-
-#Teste de razão de verossimilhança
 lrtest(rm_bneg_box, rm_bneg_box_dummie)
 
 save(qual_modelo, file="Documentos/qualidade_modelo2.RData")

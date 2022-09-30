@@ -55,6 +55,7 @@ rm(pacotes)
 #                                  FUNÇÕES                                     #
 ################################################################################
 
+# Armazena indicadores de qualidade dos modelos estimados
 qualidade <- function(glm = NULL, df = qual_modelo){
   
   #Captura o nome do modelo

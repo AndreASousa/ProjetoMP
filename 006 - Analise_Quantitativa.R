@@ -7,7 +7,6 @@ pacotes <- c("here",
              "lubridate", # utilizado para separar dados por mês e ano
              "openxlsx", # manipula arquivos ".xlsx"
              
-
              "fitdistrplus", # auxilia a identificar a distribuição que melhor se adequa
               # aos dados 
              
