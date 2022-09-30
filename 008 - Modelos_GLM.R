@@ -238,6 +238,7 @@ shapiro.test(ajuizamento$num_proc)
   # Váriância mais de mil vezes superior à média
   # Não se adequa à distribuição de Poisson
 var(ajuizamento$num_proc) / mean(ajuizamento$num_proc)
+var(ajuizamento_exsp$num_proc) / mean(ajuizamento_exsp$num_proc)
 
 # Tentando identificar da distribuição que melhor se adequa aos dados
 # Pelo gráfico de Cullen Frey
@@ -322,6 +323,8 @@ cor.test(ajuizamento$num_proc, ajuizamento$salario)
 
 # Matriz de correlações e p-valores
 correlation::correlation(ajuizamento[,3:8])
+
+correlation::correlation(ajuizamento_exsp[,3:8])
 
 # Será que a correlação muda ao selecionarmos apenas um ano?
 teste <- filter(ajuizamento, propositura == "2018")
@@ -656,7 +659,7 @@ ajuizamento |>
        y = "Frequência") + 
   theme_bw()
 
-# Modelo com a variável dependente transformada
+#2 - Modelo com a variável dependente transformada -----------------------------
   # Perdeu enormemente a capacidade preditiva
   # Tampouco adere à normalidade
 rs_populacao_bc <- lm(bc ~ populacao, ajuizamento_bc)
@@ -703,7 +706,7 @@ sf.test(rs_populacao_bc$residuals)
 rm(lambda, rs_populacao_bc)
 
 
-#2 - Regressão Linear - Número de Processos X População ------------------------
+#3 - Regressão Linear - Número de Processos X População ------------------------
   # Sem São Paulo
 
 rs_populacao_exsp <- lm(num_proc ~ populacao, ajuizamento_exsp)
@@ -730,7 +733,7 @@ ajuizamento_exsp |>
        y = "Frequência") + 
   theme_bw()
 
-# Modelo com a variável dependente transformada
+#4 - Modelo com a variável dependente transformada -----------------------------
   # Perdeu enormemente a capacidade preditiva
   # Tampouco adere à normalidade
 rs_populacao_bc_exsp <- lm(bc ~ populacao, ajuizamento_bc_exsp)
@@ -758,7 +761,7 @@ sf.test(rs_populacao_bc_exsp$residuals)
 rm(lambda, rs_populacao_bc_exsp)
 
 
-#3 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados -----------
+#5 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados -----------
 
 rlm <- lm(num_proc ~ populacao + salario + idh + pib_pc + ocupados, ajuizamento)
 
@@ -800,7 +803,7 @@ auxiliar |>
 ols_vif_tol(rlm)
 
 
-#4 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados ----------- 
+#6 - Regressão Linear - Processos X População, IDH, PIB_pc, Ocupados ----------- 
   # Sem São Paulo
 
 # Modelagem com todas as variáveis
@@ -826,7 +829,7 @@ ols_test_breusch_pagan(rlm_exsp)
 # Diagnóstico de Multicoliniariadade
 ols_vif_tol(rlm_exsp)
 
-#5 - Regressão Linear - Score Fatorial -----------------------------------------
+#7 - Regressão Linear - Score Fatorial -----------------------------------------
 
 rlm_fat <- lm(num_proc ~ f1 + f2,
               ajuizamento_fat)
@@ -845,7 +848,7 @@ qual_modelo <- qualidade(rlm_fat)
 sf.test(rlm_fat$residuals)
 
 
-#6 - Regressão Linear - Score Fatorial - Sem São Paulo -------------------------
+#8 - Regressão Linear - Score Fatorial - Sem São Paulo -------------------------
 
 # Modelagem com todas as variáveis
 rlm_fat_exsp <- lm(num_proc ~ f1 + f2,
@@ -865,7 +868,7 @@ qual_modelo <- qualidade(rlm_fat_exsp)
 sf.test(rlm_fat_exsp$residuals)
 
 
-#7 - Modelo de Poisson - Número de Processos X População -----------------------
+#9 - Modelo de Poisson - Número de Processos X População -----------------------
 
 rs_poisson <- glm(formula = num_proc ~  populacao,
                       data = ajuizamento,
@@ -878,7 +881,7 @@ summary(rs_poisson)
 qual_modelo <- qualidade(rs_poisson)
 
 
-#8 - Modelo de Poisson - Número de Processos X População -----------------------
+#10 - Modelo de Poisson - Número de Processos X População -----------------------
   # Sem São Paulo
 
 rs_poisson_exsp <- glm(formula = num_proc ~  populacao,
@@ -892,7 +895,7 @@ summary(rs_poisson_exsp)
 qual_modelo <- qualidade(rs_poisson_exsp)
 
 
-#9 - Modelo de Poisson - Processos X População, IDH, PIB_pc, Ocupados ----------
+#11 - Modelo de Poisson - Processos X População, IDH, PIB_pc, Ocupados ----------
 
 rm_poisson <- glm(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
                   data = ajuizamento,
@@ -908,7 +911,7 @@ summary(rm_poisson)
 qual_modelo <- qualidade(rm_poisson)
 
 
-#10 - Modelo de Poisson - Processos X População, IDH, PIB_pc, Ocupados ---------
+#12 - Modelo de Poisson - Processos X População, IDH, PIB_pc, Ocupados ---------
 # Sem São Paulo
 
 rm_poisson_exsp <- glm(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
@@ -925,7 +928,7 @@ summary(rm_poisson_exsp)
 qual_modelo <- qualidade(rm_poisson_exsp)
 
 
-#11 - Modelo de Poisson - Score Fatorial ---------------------------------------
+#13 - Modelo de Poisson - Score Fatorial ---------------------------------------
 
 rm_poisson_fat <- glm(formula = num_proc ~  f1 + f2,
                   data = ajuizamento_fat,
@@ -941,7 +944,7 @@ summary(rm_poisson_fat)
 qual_modelo <- qualidade(rm_poisson_fat)
 
 
-#12 - Modelo de Poisson - Score Fatorial ---------------------------------------
+#14 - Modelo de Poisson - Score Fatorial ---------------------------------------
 # Sem São Paulo
 
 rm_poisson_fat_exsp <- glm(formula = num_proc ~ f1 + f2,
@@ -958,7 +961,7 @@ summary(rm_poisson_fat_exsp)
 qual_modelo <- qualidade(rm_poisson_fat_exsp)
 
 
-#13 - Modelo Binomial Negativo - Número de Processos X População ---------------
+#15 - Modelo Binomial Negativo - Número de Processos X População ---------------
 
 rs_bneg <- glm.nb(formula = num_proc ~  populacao,
                   data = ajuizamento)
@@ -982,7 +985,7 @@ rs_bneg$theta / rs_bneg$SE.theta  # maior que 1.96
 qual_modelo <- qualidade(rs_bneg)
 
 
-#14 - Modelo Binomial Negativo - Número de Processos X População ---------------
+#16 - Modelo Binomial Negativo - Número de Processos X População ---------------
 # Sem São Paulo
 
 rs_bneg_exsp <- glm.nb(formula = num_proc ~  populacao,
@@ -998,7 +1001,7 @@ rs_bneg_exsp$theta / rs_bneg_exsp$SE.theta
 qual_modelo <- qualidade(rs_bneg_exsp)
 
 
-#15 - Modelo Binomial Negativo - Processos X População, IDH, PIB_pc e ocupados -
+#17 - Modelo Binomial Negativo - Processos X População, IDH, PIB_pc e ocupados -
 
 rm_bneg <- glm.nb(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
                   data = ajuizamento)
@@ -1020,7 +1023,7 @@ rm_bneg$theta / rm_bneg$SE.theta
 qual_modelo <- qualidade(rm_bneg)
 
 
-#16 - Modelo Binomial Negativo - Processos X População, IDH, PIB_pc e ocupados
+#18 - Modelo Binomial Negativo - Processos X População, IDH, PIB_pc e ocupados
 # Sem São Paulo
 
 rm_bneg_exsp <- glm.nb(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados,
@@ -1039,7 +1042,7 @@ rm_bneg_exsp$theta / rm_bneg_exsp$SE.theta
 qual_modelo <- qualidade(rm_bneg_exsp)
 
 
-#17 - Modelo Binomial Negativo - Score Fatorial --------------------------------
+#19 - Modelo Binomial Negativo - Score Fatorial --------------------------------
 
 rm_bneg_fat <- glm.nb(formula = num_proc ~  f1 + f2,
                       data = ajuizamento_fat)
@@ -1054,7 +1057,7 @@ summary(rm_bneg_fat)
 qual_modelo <- qualidade(rm_bneg_fat)
 
 
-#18 - Modelo Binomial Negativo - Score Fatorial --------------------------------
+#20 - Modelo Binomial Negativo - Score Fatorial --------------------------------
 # Sem São Paulo
 
 rm_bneg_fat_exsp <- glm.nb(formula = num_proc ~ f1 + f2,
@@ -1069,7 +1072,7 @@ summary(rm_bneg_fat_exsp)
 # Indicadores de Qualidade do Modelo
 qual_modelo <- qualidade(rm_bneg_fat_exsp)
 
-#19 - Modelo Zero-Inflated Poisson (ZIP) --------------------------------------
+#21 - Modelo Zero-Inflated Poisson (ZIP) --------------------------------------
 
 zero_poisson <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
                               | populacao, #pipe
@@ -1091,7 +1094,7 @@ vuong(m1 = rm_poisson, m2 = zero_poisson)
 qual_modelo <- qualidade(zero_poisson)
 
 
-#20 - Modelo Zero-Inflated Binomial Negativo (ZINB) ----------------------------
+#22 - Modelo Zero-Inflated Binomial Negativo (ZINB) ----------------------------
 zero_bneg <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
                            | populacao, #pipe
                            data = ajuizamento,
@@ -1104,7 +1107,7 @@ vuong(m1 = rm_bneg, m2 = zero_bneg)
 # Indicadores de Qualidade do Modelo
 qual_modelo <- qualidade(zero_bneg)
 
-#21 - Modelo Zero-Inflated Poisson (ZIP) ---------------------------------------
+#23 - Modelo Zero-Inflated Poisson (ZIP) ---------------------------------------
   # Sem São Paulo
 
 zero_poisson_exsp <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
@@ -1125,7 +1128,7 @@ vuong(m1 = rm_poisson_exsp, m2 = zero_poisson_exsp)
 # Indicadores de Qualidade do Modelo
 qual_modelo <- qualidade(zero_poisson_exsp)
 
-#22 - Modelo Zero-Inflated Binomial Negativo (ZINB) ----------------------------
+#24 - Modelo Zero-Inflated Binomial Negativo (ZINB) ----------------------------
   # Sem São Paulo
 zero_bneg_exsp <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
                       | populacao, #pipe
@@ -1141,7 +1144,7 @@ vuong(m1 = rm_bneg_exsp, m2 = zero_bneg_exsp)
 qual_modelo <- qualidade(zero_bneg_exsp)
 
 
-#23 - Modelo Pareto Generalizado - Número de Processos X População -------------
+#25 - Modelo Pareto Generalizado - Número de Processos X População -------------
 
 rs_pareto <- vglm(num_proc ~ populacao,
                     family = VGAM::gpd(threshold = -0.1),
@@ -1154,7 +1157,7 @@ summary(rs_pareto)
 qual_modelo <- qualidade(rs_pareto)
 
 
-#24 - Modelo Pareto Generalizado - Número de Processos X População -------------
+#26 - Modelo Pareto Generalizado - Número de Processos X População -------------
   # Sem São Paulo
 
 rs_pareto_exsp <- vglm(num_proc ~ populacao,
@@ -1167,7 +1170,7 @@ summary(rs_pareto_exsp)
 qual_modelo <- qualidade(rs_pareto_exsp)
 
 
-#25 - Modelo Pareto Generalizado - Processos X População, IDH, PIB_pc e ocupados
+#27 - Modelo Pareto Generalizado - Processos X População, IDH, PIB_pc e ocupados
 
 rm_pareto <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados,
                   family = VGAM::gpd(threshold = -0.1),
@@ -1186,7 +1189,7 @@ summary(rm_pareto)
 qual_modelo <- qualidade(rm_pareto)
 
 
-#26 - Modelo Pareto Generalizado - Processos X População, IDH, PIB_pc e ocupados
+#28 - Modelo Pareto Generalizado - Processos X População, IDH, PIB_pc e ocupados
   # Sem São Paulo
 
 rm_pareto_exsp <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados,
@@ -1209,7 +1212,7 @@ summary(rm_pareto_exsp)
 qual_modelo <- qualidade(rm_pareto_exsp)
 
 
-# 27 - Modelo Binomial Negativo - Número de Processos X População Transformada--
+#29 - Modelo Binomial Negativo - Número de Processos X População Transformada--
 
 lambda <- powerTransform(ajuizamento$populacao)$lambda
 
@@ -1225,7 +1228,7 @@ summary(rs_bneg_box)
 qual_modelo <- qualidade(rs_bneg_box)
 
 
-# 28 - Modelo Binomial Negativo - Número de Processos X População Transformada--
+#30 - Modelo Binomial Negativo - Número de Processos X População Transformada--
   # Sem São Paulo
 
 lambda_exsp <- powerTransform(ajuizamento_exsp$populacao)$lambda
@@ -1242,11 +1245,11 @@ summary(rs_bneg_box_exsp)
 qual_modelo <- qualidade(rs_bneg_box_exsp)
 
 
-# 29 - Modelo Binomial Negativo - População Transformada------------------------
+#31 - Modelo Binomial Negativo - População Transformada------------------------
 rm_bneg_box <- glm.nb(num_proc ~ populacao + salario + idh + pib_pc + ocupados,
                       data = pop_lambda)
 
-#procedimento "stepwise"
+#procedimento "stepwise" - Excluiu o salário médio
 rm_bneg_box <- step(rm_bneg_box, k = 3.841459)
 
 summary(rm_bneg_box)
@@ -1254,7 +1257,7 @@ summary(rm_bneg_box)
 # Indicadores de Qualidade do Modelo
 qual_modelo <- qualidade(rm_bneg_box)
 
-# 30 - Modelo Binomial Negativo - População Transformada------------------------
+#32 - Modelo Binomial Negativo - População Transformada------------------------
   # Sem São Paulo
 
 rm_bneg_box_exsp <- glm.nb(num_proc ~ populacao + salario + idh + pib_pc + ocupados,
@@ -1269,13 +1272,13 @@ summary(rm_bneg_box_exsp)
 qual_modelo <- qualidade(rm_bneg_box_exsp)
 
 
-#31 - Modelo ZINB - Número de Processos X População Transformada----------------
+#33 - Modelo ZINB - Número de Processos X População Transformada----------------
 rs_zero_bneg_box <- zeroinfl(formula = num_proc ~  populacao
                              | populacao, #pipe
                              data = pop_lambda,
                              dist = "negbin")
 
-# Teste de Vuong
+# Teste de Vuong - P-Valor Superior a 0.05
 vuong(m1 = rs_bneg_box, m2 = rs_zero_bneg_box)
 
 summary(rs_zero_bneg_box) # Não excluiu salário
@@ -1284,14 +1287,16 @@ summary(rs_zero_bneg_box) # Não excluiu salário
 qual_modelo <- qualidade(rs_zero_bneg_box)
 
 
-#32 - Modelo ZINB - Número de Processos X População Transformada----------------
+#34 - Modelo ZINB - Número de Processos X População Transformada----------------
   # Sem São Paulo
 rs_zero_bneg_box_exsp <- zeroinfl(formula = num_proc ~  populacao
                                   | populacao, #pipe
                                   data = pop_lambda_exsp,
                                   dist = "negbin")
 
-# Teste de Vuong
+# Teste de Vuong - Hipótese H0 para as medidas corrigidas pelo AIC e BIC
+  # O teste padrão apresenta vies:
+  # https://stats.stackexchange.com/questions/182020/zero-inflated-poisson-regression-vuong-test-raw-aic-or-bic-corrected-results
 vuong(m1 = rs_bneg_box_exsp, m2 = rs_zero_bneg_box_exsp)
 
 summary(rs_zero_bneg_box_exsp) # Não excluiu salário
@@ -1300,7 +1305,7 @@ summary(rs_zero_bneg_box_exsp) # Não excluiu salário
 qual_modelo <- qualidade(rs_zero_bneg_box_exsp)
 
 
-#33 - Modelo ZINB - População Transformada--------------------------------------
+#35 - Modelo ZINB - População Transformada--------------------------------------
 rm_zero_bneg_box <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
                       | populacao, #pipe
                       data = pop_lambda,
@@ -1318,7 +1323,7 @@ summary(rm_zero_bneg_box) # Não excluiu salário
 qual_modelo <- qualidade(rm_zero_bneg_box)
 
 
-#34 - Modelo ZINB - População Transformada--------------------------------------
+#36 - Modelo ZINB - População Transformada--------------------------------------
   # Sem São Paulo
 rm_zero_bneg_box_exsp <- zeroinfl(formula = num_proc ~  populacao + salario + idh + pib_pc + ocupados
                          | populacao, #pipe
@@ -1336,7 +1341,8 @@ summary(rm_zero_bneg_box_exsp) # Não excluiu salário
 # Indicadores de Qualidade do Modelo
 qual_modelo <- qualidade(rm_zero_bneg_box_exsp)
 
-#35 - Modelo Pareto Generalizado - Número de Processos X População Transformada-
+
+#37 - Modelo Pareto Generalizado - Número de Processos X População Transformada-
 
 rs_pareto_box <- vglm(num_proc ~  populacao, 
                       family = VGAM::gpd(threshold = -0.1),
@@ -1348,7 +1354,7 @@ summary(rs_pareto_box)
 qual_modelo <- qualidade(rs_pareto_box)
 
 
-#36 - Modelo Pareto Generalizado - Número de Processos X População Transformada-
+#38 - Modelo Pareto Generalizado - Número de Processos X População Transformada-
 # Sem São Paulo
 
 rs_pareto_box_exsp <- vglm(num_proc ~  populacao, 
@@ -1362,7 +1368,7 @@ summary(rs_pareto_box_exsp)
 qual_modelo <- qualidade(rs_pareto_box_exsp)
 
 
-#37 - Modelo Pareto Generalizado - População Transformada-----------------------
+#39 - Modelo Pareto Generalizado - População Transformada-----------------------
 
 rm_pareto_box <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados, 
                        family = VGAM::gpd(threshold = -0.1),
@@ -1374,7 +1380,7 @@ summary(rm_pareto_box)
 qual_modelo <- qualidade(rm_pareto_box)
 
 
-#38 - Modelo Pareto Generalizado - População Transformada-----------------------
+#40 - Modelo Pareto Generalizado - População Transformada-----------------------
   # Sem São Paulo
 
 rm_pareto_box_exsp <- vglm(num_proc ~  populacao + salario + idh + pib_pc + ocupados, 
@@ -1391,7 +1397,11 @@ qual_modelo <- qualidade(rm_pareto_box_exsp)
 (qual_modelo <- qual_modelo |>
   arrange(desc(ll), desc(AIC)))
 
+qual_modelo <- arrange(qual_modelo, desc(ll), desc(AIC))
 
 save(qual_modelo, file="Documentos/qualidade_modelo.RData")
+save(rm_bneg_box_exsp, file="Documentos/qualidade_modelo.RData")
+
+
 
 ##################################### FIM ######################################
