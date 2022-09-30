@@ -8,7 +8,8 @@ pacotes <- c("here",
              "MASS", # Para rodar modelos do tipo binomial negativo
              "fastDummies", # Transforma var categóricas em dummies
              "correlation", # matriz de correlações e p-valores
-             "lmtest" # Teste da Razão de Verosimilhança
+             "lmtest", # Teste da Razão de Verosimilhança
+             "openxlsx" # manipula arquivos ".xlsx"
              )
 
 if(sum(as.numeric(!pacotes %in% installed.packages())) != 0){
@@ -216,9 +217,9 @@ bneg_filhos <- glm.nb(num_proc ~ n_filhos,
                         data = alimento)
 
 qual_modelo <- qualidade(bneg_filhos)
-(qual_modelo <- arrange(qual_modelo, desc(ll), desc(AIC), desc(RSE)))
-  
+
 # Teste de razão de verossimilhança
+lrtest(bneg_25a39, bneg_divorcio)
 lrtest(bneg_25a39, bneg_menor25)
 
 
@@ -249,9 +250,10 @@ bneg_filhos_exsp <- glm.nb(num_proc ~ n_filhos,
                       data = alimento_exsp)
 
 qual_modelo <- qualidade(bneg_filhos_exsp)
-(qual_modelo <- arrange(qual_modelo, desc(ll), desc(AIC), desc(RSE)))
+
 
 # Teste de razão de verossimilhança
+lrtest(bneg_25a39_exsp, bneg_divorcio_exsp)
 lrtest(bneg_25a39_exsp, bneg_menor25_exsp)
 
 
@@ -283,11 +285,13 @@ qual_modelo <- qualidade(bneg_filhos_dummie)
 
 (qual_modelo <- arrange(qual_modelo, desc(ll), desc(AIC), desc(RSE)))
 
+summary(bneg_25a39_dummie)
+
 # Teste de razão de verossimilhança
 lrtest(bneg_25a39_dummie, bneg_menor25_dummie)
 
 
-#3 - Regressões Bneg Multipla --------------------------------------------------
+#5 - Regressões Bneg Multipla --------------------------------------------------
 
 rm_bneg <- glm.nb(num_proc ~ .,
                   data = alimento[ , 2:length(alimento)])
@@ -299,28 +303,65 @@ summary(rm_bneg)
 
 qual_modelo <- qualidade(rm_bneg)
 
+rm(alimento, alimento_exsp)
 
 ################################################################################
 #                      Estudando as Ações de Saúde                             #
 ################################################################################
 
-# Estatísticas descritivas univariadas e tabela de frequências
-summary(saude$num_proc)
-
-# Matriz de Correlações
-rho_saude <- cor(saude)
+rho_saude <- cor(saude[, c(-1, -2)])
 rho_saude[1, ]
+
+rho_saude <- rho_saude[1, ] |>
+  as.data.frame() |>
+  rownames_to_column("Faixas Etarias")
+
+names(rho_saude) <- c("Faixas Etarias", "Correlaçao")
+
+rho_saude <- rho_saude[9:25, ]
+
+
+variaveis <- c("num_proc", "divorcios", "n_filhos", "f0a4", "f5a9", "f10a14",
+               "f15a19", "f20a24", "f25a29", "f30a34", "f35a39", "f40a44",
+               "f45a49", "f50a54", "f55a59", "f60a64", "f65a69", "f70a74",
+               "f75a79", "f80mais")
+
+correlation(saude[ , variaveis])[1:19, ]
+
+cor.test(saude$num_proc, saude$f0a4)
+
+# Será que a correlação muda ao excluirmos São Paulo?
+teste <- filter(saude, comarca != "São Paulo")
+
+rho_teste <- cor(teste[, c(-1, -2)])
+rho_teste[1, ]
+rho_teste <- rho_teste[1, ] |>
+  as.data.frame() |>
+  rownames_to_column("Faixas Etarias")
+
+names(rho_teste) <- c("Faixas Etarias", "Correlaçao_exsp")
+
+rho_teste <- rho_teste[9:25, ]
+
+rho_saude <- left_join(rho_saude, rho_teste, by = "Faixas Etarias")
+
+openxlsx::write.xlsx(rho_saude,
+                     file = "E:/Andre/DataScience/Projeto MP/Documentos/correlacao_saude.xlsx",
+                     overwrite = TRUE)
+
+correlation(teste[ , variaveis])[1:19, ]
+
+
 
 # Cria novas faixas etárias e adiciona os clusters
 
 saude <- saude |>
-  mutate(menor20 = rowSums(alimento[ , c("f0a4", "f5a9", "f10a14","f15a19")]))|>
-  mutate(menor25 = rowSums(alimento[, c("f0a4", "f5a9", "f10a14","f15a19", "f20a24")])) |>
-  mutate(f25a39 = rowSums(alimento[, c("f25a29", "f30a34", "f35a39")])) |>
-  # Queremos a relação com o tamanho da população
-  mutate(across(c("menor20", "menor25", "f25a39", "divorcios", "n_filhos"), .fns = ~./ populacao)) |>
+  mutate(menor20 = rowSums(saude[ , c("f0a4", "f5a9", "f10a14","f15a19")]))|>
+  mutate(f20a39 = rowSums(saude[, c("f20a24","f25a29", "f30a34", "f35a39")])) |>
+  mutate(f40a59 = rowSums(saude[, c("f40a44", "f45a49", "f50a54", "f55a59")])) |>
+  mutate(maior60 = rowSums(saude[, c("f60a64", "f65a69", "f70a74", "f75a79", "f80mais")])) |>
   left_join(cluster, by = "comarca")|>
-  dplyr::select(comarca, num_proc, menor20, menor25, f25a39, divorcios, n_filhos, cluster_k) |>
+  dplyr::select(comarca, num_proc, menor20, f20a39, f40a59, maior60, cluster_k) |>
   rename(cluster = cluster_k)
 
 # n-1 Dummies
@@ -329,9 +370,93 @@ saude <- dummy_columns(.data = saude,
                           remove_selected_columns = T,
                           remove_most_frequent_dummy = T)  
 
-anova(saude_step)
-sf.test(saude_step$residuals)
+#2 - Regressões Simples Binomial Negativo --------------------------------------
+qual_modelo <- data.frame(matrix(ncol = 5, nrow = 0))
+colnames(qual_modelo) <- c("Modelo", "df", "ll", "AIC", "RSE")
 
-chart.Correlation(alimento)
+bneg_menor20 <- glm.nb(num_proc ~ menor20,
+                       data = saude)
+
+qual_modelo <- qualidade(bneg_menor20)
+
+bneg_20a39 <- glm.nb(num_proc ~ f20a39,
+                       data = saude)
+
+qual_modelo <- qualidade(bneg_20a39)
+
+bneg_40a59 <- glm.nb(num_proc ~ f40a59,
+                     data = saude)
+
+qual_modelo <- qualidade(bneg_40a59)
+
+bneg_maior60 <- glm.nb(num_proc ~ maior60,
+                        data = saude)
+
+qual_modelo <- qualidade(bneg_maior60)
+
+
+# Teste de razão de verossimilhança
+lrtest(bneg_menor20, bneg_maior60)
+
+#3 - Regressões Simples Binomial Negativo - Sem Sâo Paulo ----------------------
+saude_exsp <- filter(saude, comarca != "São Paulo")
+
+bneg_menor20_exsp <- glm.nb(num_proc ~ menor20,
+                            data = saude_exsp)
+
+qual_modelo <- qualidade(bneg_menor20_exsp)
+
+bneg_20a39_exsp <- glm.nb(num_proc ~ f20a39,
+                          data = saude_exsp)
+
+qual_modelo <- qualidade(bneg_20a39_exsp)
+
+bneg_40a59_exsp <- glm.nb(num_proc ~ f40a59,
+                          data = saude_exsp)
+
+qual_modelo <- qualidade(bneg_40a59_exsp)
+
+bneg_maior60_exsp <- glm.nb(num_proc ~ maior60,
+                            data = saude_exsp)
+
+qual_modelo <- qualidade(bneg_maior60_exsp)
+
+# Teste de razão de verossimilhança
+lrtest(bneg_menor20_exsp, bneg_maior60_exsp)
+
+
+#4 - Regressões Binomial Negativo Com  Clusters --------------------------------
+bneg_menor20_dummie <- glm.nb(num_proc ~ menor20 + cluster_2 + cluster_3 + cluster_4 + cluster_5,
+                              data = saude)
+
+qual_modelo <- qualidade(bneg_menor20_dummie)
+
+bneg_20a39_dummie <- glm.nb(num_proc ~ f20a39 + cluster_2 + cluster_3 + cluster_4 + cluster_5,
+                            data = saude)
+
+qual_modelo <- qualidade(bneg_20a39_dummie)
+
+bneg_40a59_dummie <- glm.nb(num_proc ~ f40a59 + cluster_2 + cluster_3 + cluster_4 + cluster_5,
+                            data = saude)
+
+qual_modelo <- qualidade(bneg_40a59_dummie)
+
+bneg_maior60_dummie <- glm.nb(num_proc ~ maior60 + cluster_2 + cluster_3 + cluster_4 + cluster_5,
+                              data = saude)
+
+qual_modelo <- qualidade(bneg_maior60_dummie)
+
+# Aferindo a Qualidade dos Modelos
+(qual_modelo <- arrange(qual_modelo, desc(ll), desc(AIC), desc(RSE)))
+
+openxlsx::write.xlsx(qual_modelo,
+                     file = "E:/Andre/DataScience/Projeto MP/Documentos/qualidade_modelo_saude.xlsx",
+                     overwrite = TRUE)
+
+# Teste de razão de verossimilhança
+lrtest(bneg_menor20_dummie, bneg_maior60_dummie)
+
+summary(bneg_maior60_dummie)
+summary(bneg_maior60)
 
 ##################################### FIM ######################################
