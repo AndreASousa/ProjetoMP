@@ -25,7 +25,7 @@
     # dependentes desta.
 
   # Por essa razão, os dados não estão aglutinados em uma só tabela, mas 
-    # separados em mais de um data.frame concetável pelas chaves primárias.
+    # separados em mais de um data.frame conectável pelas chaves primárias.
 
   # Os "sujeitos" do bando de dados são a) os números de Processo; b) as Comarcas;
     # e c) as cidades (identificadas pelo código do IBGE).
@@ -382,6 +382,8 @@ distribuicao_df$tipo <- str_replace_all(distribuicao_df$tipo, "/", "")
 distribuicao_df$tipo <- str_replace_all(distribuicao_df$tipo, "\\.", "")
 distribuicao_df$tipo <- as.factor(distribuicao_df$tipo)
 
+distribuicao_df$natureza <- str_replace_all(distribuicao_df$natureza, "\\.", "")
+
 ## Removendo informações duplicadas
   # Algumas listas apenas retificam distribuições anteriores
 
@@ -413,9 +415,140 @@ distribuicao_df <- distribuicao_df |>
   rbind(multiplos_recursos) |>
   arrange(data, pagina, processo)
 
+# Adiciona comentários à estrutura de dados
+
+comment(distribuicao_df) <- c(
+  "Lista os procedimentos distribuidos à Procuradoria Cível do Ministério Público de São Paulo [MP].",
+  "Cargo : Representa o Cargo de Procurador de Justiça que recebeu o processo. 99 para secretaria;",
+  "Processo: Código Unificado pelo CNJ - Vide Resolução CNJ n. 65/08;",
+  "Propositura: O ano de ajuizamento ou interposição do processo, recurso ou insidente processual;",
+  "Codigo: Unidade de origem dentro da estrutura administrativa dos Tribunais (OOOO);",
+  "Tribunal: Tribunal ou Circunscrição Militar em que o procedimento teve início. 8.26 representa o TJ/SP;",
+  "Digital: Indica se o procedimento corre em meio digital ou em autos de papel;",
+  "Tipo: O tipo de manifestação encaminhada ao MP (Ex. recurso de apelação, recurso especial, ação rescisória etc.);",
+  "      O significado dos acrônimos está registrado em: comment(distribuicao_df$tipo)",
+  "Natureza: Representa o assunto geral discutido no processo (saúde, alimentos, recuperação judicial etc.);",
+  "      O significado das abreviações está registrado em: comment(distribuicao_df$natureza)",
+  "Data: O dia em que o procedimento foi distribuido a um dos Procuradores ou à secretaria;",
+  "Pagina - mero controle pessoal para o bom desenvolvimento do trabalho") 
+
+
+
+comment(distribuicao_df$tipo) <- c(
+  "Lista de abreviações:",
+  "ADDRESP - Agravo contra despacho denegatório de recurso especial;",
+  "ADDREXT - Agravo contra despacho denegatório de recurso extraordinário;",
+  "ADDX - Agravo contra despacho denegatório de recurso extraordinário;",
+  "ADRRXT - Pedido de efeito suspsensivo a recurso;",
+  "AI - Agravo de Instrumento;",
+  "AIDDESP - Agravo de instrumento contra despacho denegatório de recurso especial;",
+  "AIDDEX - Agravo de instrumento contra despacho denegatório de recurso extraordinário;",
+  "AINT - Agravo Interno;",
+  "AIRESP - Agravo de instrumento contra despacho denegatório de recurso especial;",
+  "AIREXT - Agravo de instrumento contra despacho denegatório de recurso extraordinário;",
+  "AJ - Apelação judicial;",
+  "AP - Recurso de apelação;",
+  "AR - Ação rescisória;",
+  "AREG - Agravo regimental;",
+  "CAUTELAR - Medida cautelar endereçada para o Tribunal;",
+  "CONFLITO - Conflito de competência;",
+  "CP - Correição parcial cível;",
+  "ED - Embargos de Declaração;",
+  "EI - Embargos infringentes;",
+  "EX - Embargos de declaração com efeito infringente;",
+  "EXT - Recurso extraordinário;",
+  "HDATA - Habeas data;",
+  "IF - Agravo de Instrumento;",
+  "IRDR - Incidente de resolução de demandas repetitivas;",
+  "MI - Mandado de injunção;",
+  "MS - Mandado de segurança;",
+  "PETIÇÃO - Pedidos de concessão de efeito suspensivo a recursos;",
+  "RECLAM - Ação de Reclamação;",
+  "RECURSO - Recurso de Natureza administrativa (vinculado a Registros Públicos);",
+  "REEXAME - Reexame necessário;",
+  "RESP - Recurso especial;",
+  "RESPAD - Recurso Especial interposo pela Administração Pública;",
+  "REXT - Recurso extraordinário;",
+  "RO - Recurso ordinário constitucional;",
+  "SUSP - Pedido de efeito suspsensivo a recurso;",
+  "TUTELA - Pedido de tutela de urgência."
+  )
+
+
+comment(distribuicao_df$natureza) <- c(
+"ADJ.BENS  - Adjudicação de bens;",                         "ADOÇÃO  - Pedido de adoção;",                             
+"AÈREA  - Reparação de danos contra mepresa aérea;",        "ALBC  - Alienação judicial de bens;",                     
+"ALFIDUC  - Alienação fiduciária;",                         "ALIMENT  - Ação de alimentos;",                           
+"ALIMPRO  - Alimentos provisórios;",                        "ALPAREN  - Alienação parental;",                         
+"ALT.CAS  - Regime de bens entre os cônjuges;",             "ANUL.CAS  - Anulação de casamento;",                      
+"ANULAT  - Ação anulatória de ato ou negócio jurídico;",    "ANULMAT  - Anulação de matrícula;",                       
+"APOSSAM  - Ação de restabelecimento de pensão por morte;", "ARROLA  - Arrolamento de Bens;",                          
+"ARROLAM  - Arrolamento de bens;",                          "ATO ADM  - Ato administrativo;",                          
+"AUSÊNCI  - Declaração de ausência;",                       "BUSCAME  - Busca e apreensão de menor;",                  
+"BUSCBEN  - Busca e apreensão de bem;",                     "CAUTELA  - Ação cautelar;",                               
+"CO/VEN  - Contrato de compra e venda;",                    "COB.TXS  - Cobrança de taxas;",                           
+"COBRANÇ  - Ação de cobrança;",                             "COBSEG  - Cobrança de seguro;",                           
+"COMINAT  - Ação cominatória;",                             "CONCPRE  - Concordata preventiva;",                       
+"CONCUB  - União estável ou concubinato;",                  "CONCUR  - Concurso público;",                             
+"CONCURS  - Concurso Público;",                             "CONDOM  - Direito condominial;",                          
+"CONSE  - Suprimento judicial de consentimento;",           "CONSIG  - Consignação em pagamento;",                     
+"CONTR_A  - Cotnrato administrativo;",                      "CONVERS  - Conversão de separação em divórcio;",          
+"CURATEL  - Direito de curatela;",                          "DECLARA  - Ação declaratória;",                           
+"DEMOLIT  - Ação demolitória;",                             "DESAPR  - Ação de desapropriação;",                       
+"DESPEJO  - Despejo por falta de pagamento;",               "DIR.OBR  - Direito das obrigações;",                      
+"DISCRIM  - Bens públicos;",                                "DISSOLU  - Dissolução de união estável;",                 
+"DIV.DEM  - Divisão e demarcação de terras;",               "DIVÓRCI  - Divórcio;",                                    
+"DIVÓRCIO  - Ação de divórcio;",                            "DÚVIDA  - Dúvida registral;",                             
+"EMBEXEC  - Embargo à execução;",                           "ESP INTERN  - Internação de idoso;",                      
+"ESP MEDIC  - Fornecimento de medicamentos;",               "ESP SAÚDE  - Direito à saúde;",                           
+"EXE.ALM  - Execução de alimentos;",                        "EXE.FISC  - Execução fiscal;",                            
+"EXECAMB  - Execução tributária;",                          "EXECSEN  - Cumprimento ou execução de sentença;",         
+"EXECUÇÃ  - Ação de execução;",                             "EXO.PEN  - Exoneração de alimentos;",                     
+"FALÊNCI  - Direito falimentar;",                           "FALÊNCIA  - Ação de falência;",                           
+"FAMILIA  - Direito de família;",                           "GUARDA  - Ação de guarda;",                               
+"HAB.CRD  - Pedido de habilitação de crédito;",             "HABEAS  - Habeas data;",                                  
+"IMISSÃO  - Ação de imissão na posse;",                     "IMPUG  - Pedido de impugnação de crédito;",               
+"INDENIZ  - Ação de reparação de danos (indenizatória);",   "INSOLVÊ  - Declaração de Insolvência Civil;",             
+"INTERD  - Ação de interdição;",                            "INTERN  - Internação compulsória;",                       
+"INTPROIB  - Interdito proibitório;",                       "INVENTÁ  - Inventário ou alvará judicial;",               
+"INVENTÁR  - Inventário;",                                  "INVESTIG  - Investigação de paternidade;",                
+"IPVA  - IPVA;",                                            "LICIT  - Licitação pública;",                             
+"LIQUID  - Liquidação judicial;",                           "LOTEAM  - Loteamento de terras;",                         
+"MATERIN  - Investigação de maternidade;",                  "MEDIC  - Mdicamentos;",                                   
+"MODCLÁ  - Modificação de multa cominatória;",              "MODCLÁU  - Modificação de cláusula de visitas;",          
+"MODIF.G  - Modificação de guarda;",                        "MODIF.GD  - Modificação de guarda;",                      
+"MONITÓR  - Ação monitória;",                               "NEG.PAT  - Ação negatória de paternidade;",               
+"NUN.OBR  - Nunciação de obra nova;",                       "OBRIG_F  - Ação de obrigação de fazer;",                  
+"OBRIG_FA  - Obrigação de Fazer;",                          "OUTRAS  - outras;",                                       
+"PARTILHA  - Partilha de bens;,",                            "PATENTE  - Direito de Propriedade Industrial;",           
+"PÁTRIO  - Destituição de poder familiar;",                 "PAULIANA  - Ação pauliana;",                              
+"PED.FAL  - Pedido de falência;",                           "PED.REST  - Pedido de restituição de bens ou valores;",   
+"PENSÃO  - Pensão por morte;",                              "PET.HER  - Petição de herança;",                          
+"POSSE  - Direito de posse;",                               "PR.CONT  - Ação de prestação de contas;",                 
+"PRESTSE  - Contrato de prestação de serviço;",             "PROTET  - Medida protetiva;",                             
+"PROV  - Pedido de providências em registro público;",      "REC.FAT  - Reconhecimento de união de fato;",             
+"RECU.JU  - Recuperação judicial;",                         "RECU.JUD  - Recuperação judicial;",                       
+"REG.PUB  - Registro públicos;",                            "REGIMO  - Registro de imóveis;",                          
+"REGISTR  - Registro públicos;",                            "REGUL.V  - Regulamentação de Visitas;",                   
+"REIVIND  - Ação reivindicatória;",                         "RET.AREA  - Ação de retificação de área;",                
+"RET.CIV  - Retificação de registro civil;",                "REVBEN  - Revisão de benefício;",                         
+"REVISIO  - Revisional de alimentos;",                      "REVISION  - Ação revisional de alimentos;",               
+"REVOCAT  - Ação revocatória;",                             "SAÚDE  - Direito à saúde;",                               
+"SCORRES  - Sem correspondente;",                           "SEP.CON  - Ação de separação;",                           
+"SEP.COR  - Separação de corpos;",                          "SEP.JUD  - Separação judicial;",                          
+"SEP.LIT  - Separação litigiosa;",                          "SEQ.BEN  - Sequestro de Bens;",                           
+"SERVID  - Servidor Público;",                              "SOC.ASS  - Direito societário ou associativo;",           
+"SUPIDAD  - Suprimento de idade;",                          "SUSPROT  - Suspensão de protesto;",                       
+"SVISITA  - Regime de visitas;",                            "TESTAM  - Registro de testamento;",                       
+"TESTAME  - Cumprimento de testamento;",                    "TRIBMUN  - Tributos municipais;",                         
+"TRIBUT  - Direito Tributário;",                            "TUTELA  - Tutela cível;",                                 
+"UNIAO  - Reconhecimento de união estável;",                "USUCAP  - Ação de usucapião."
+)
+
+
 rm(distribuicao_padrao, distribuicao_dlc, multiplos_recursos)
 
 save(distribuicao_df, file="Documentos/Distribuicao_df.RData")
 
-##################################### FIM ######################################
 
+##################################### FIM ######################################

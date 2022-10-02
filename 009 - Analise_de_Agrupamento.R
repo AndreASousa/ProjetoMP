@@ -922,8 +922,17 @@ rm_bneg_box <- glm.nb(num_proc ~ populacao + salario + idh + pib_pc,
 rm_bneg_box <- step(rm_bneg_box, k = 3.841459)
 
 summary(rm_bneg_box)
+summary(rm_bneg_box_dummie)
 
 lrtest(rm_bneg_box, rm_bneg_box_dummie)
+
+# Teste de Breusch-Pagan para diagnóstico de heterocedasticidade
+# H0 : ausência de heterocedasticidade.
+# H1: heterocedasticidade, ou seja, correlação entre resíduos e uma ou mais
+# variáveis explicativas, o que indica omissão de variável relevante!
+#"Prob > Chi2"  é o p-value
+ols_test_breusch_pagan(rlm)
+
 
 save(qual_modelo, file="Documentos/qualidade_modelo2.RData")
 save(rm_bneg_box_dummie, file="Documentos/qualidade_modelo2.RData")
